@@ -24,16 +24,17 @@
 
 앞선 세 레포와 동일: **문서 → 에이전트 구현 → 검증**. 사람(Jin)은 스펙·리뷰·실토큰 스모크·npm 공개 승인, 구현은 Claude Code가 `docs/TASKS.md` 단위로. 공통 게이트는 `npm run check`.
 
-## 퀵스타트 (T0 완료 후 유효)
+## 퀵스타트
 
 ```bash
 npm install
-npm run check     # typecheck + lint + test — 공통 게이트
-npm run cli init  # 온보딩 3문항 (모국어 / 프로바이더+키 / 메신저+토큰)
-npm run cli start # long polling 데몬 시작
+npm run check        # typecheck + lint + format:check + test — 공통 게이트
+npm run cli -- init  # 온보딩 3문항 (모국어 / 프로바이더+키 / 메신저+토큰) — T7에서 구현
+npm run cli -- start # long polling 데몬 시작 — T7에서 구현
 ```
 
 ## 상태
 
 - 2026-09-04: 문서 단계 (코드 미작성). T0부터 시작.
-- npm 패키지명은 미결 (SPEC §8) — 레포/폴더명은 `message`.
+- 2026-09-05: T0 스캐폴딩 완료 (TS strict·ESLint·Prettier·Vitest·`npm run check`). 다음은 T1.
+- npm 패키지명은 미결 (SPEC §8) — `package.json`은 임시 이름 `message` + `"private": true`. T11에서 이름 확정 시 해제.
