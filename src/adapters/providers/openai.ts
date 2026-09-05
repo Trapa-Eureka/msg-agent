@@ -1,0 +1,121 @@
+// OpenAI provider — Chat Completions over injected fetch (tests use a mock fetch; no network).
+import type {
+  Chunk,
+  ExtractedDoc,
+  Result,
+  TranslateOptions,
+  TranslatedChunk,
+  TranslatorProvider,
+} from "../../core/index.js";
+import { ProviderError, err, ok, summaryPrompt, translationPrompt } from "../../core/index.js";
+
+export const OPENAI_DEFAULT_MODEL = "gpt-5";
+export const OPENAI_BASE_URL = "https://api.openai.com/v1";
+
+export interface OpenAIProviderOptions {
+  apiKey: string;
+  model?: string;
+  fetch?: typeof fetch;
+  baseUrl?: string;
+}
+
+interface ChatCompletion {
+  choices?: { message?: { content?: string | null }; finish_reason?: string }[];
+}
+
+function statusToError(status: number, detail: string): ProviderError {
+  if (status === 401 || status === 403) return new ProviderError("auth", false, status, detail);
+  if (status === 429) return new ProviderError("rate_limit", true, status, detail);
+  if (status >= 500) return new ProviderError("server", true, status, detail);
+  return new ProviderError("unknown", false, status, detail);
+}
+
+export class OpenAIProvider implements TranslatorProvider {
+  private readonly fetchImpl: typeof fetch;
+  private readonly baseUrl: string;
+  private readonly apiKey: string;
+  readonly model: string;
+
+  constructor(opts: OpenAIProviderOptions) {
+    this.apiKey = opts.apiKey;
+    this.model = opts.model ?? OPENAI_DEFAULT_MODEL;
+    this.fetchImpl = opts.fetch ?? fetch;
+    this.baseUrl = (opts.baseUrl ?? OPENAI_BASE_URL).replace(/\/$/u, "");
+  }
+
+  private async request(path: string, init: RequestInit): Promise<Response> {
+    try {
+      return await this.fetchImpl(`${this.baseUrl}${path}`, {
+        ...init,
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (e) {
+      throw new ProviderError(
+        "network",
+        true,
+        undefined,
+        e instanceof Error ? e.name : "fetch_failed",
+      );
+    }
+  }
+
+  private async complete(system: string, user: string): Promise<string> {
+    const res = await this.request("/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        model: this.model,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+    });
+    if (!res.ok) throw statusToError(res.status, `http_${String(res.status)}`);
+    let body: ChatCompletion;
+    try {
+      body = (await res.json()) as ChatCompletion;
+    } catch {
+      throw new ProviderError("bad_response", true, res.status, "invalid_json");
+    }
+    const choice = body.choices?.[0];
+    const text = choice?.message?.content?.trim() ?? "";
+    if (choice?.finish_reason === "content_filter")
+      throw new ProviderError("refusal", false, res.status, "content_filter");
+    if (text === "") throw new ProviderError("bad_response", true, res.status, "empty_text");
+    if (choice?.finish_reason === "length")
+      throw new ProviderError("bad_response", false, res.status, "length");
+    return text;
+  }
+
+  async translate(chunks: Chunk[], to: string, opts: TranslateOptions): Promise<TranslatedChunk[]> {
+    const out: TranslatedChunk[] = [];
+    for (const chunk of chunks) {
+      const p = translationPrompt(chunk.text, to, opts.sourceLangHint);
+      const text = await this.complete(p.system, p.user);
+      out.push({ index: chunk.index, text });
+      opts.onProgress?.(out.length, chunks.length);
+    }
+    return out;
+  }
+
+  async summarize(doc: ExtractedDoc, to: string): Promise<string> {
+    const p = summaryPrompt(doc, to);
+    return this.complete(p.system, p.user);
+  }
+
+  async verify(): Promise<Result<void, ProviderError>> {
+    let res: Response;
+    try {
+      res = await this.request(`/models/${encodeURIComponent(this.model)}`, { method: "GET" });
+    } catch (e) {
+      return err(e instanceof ProviderError ? e : new ProviderError("unknown", false));
+    }
+    if (res.ok) return ok(undefined);
+    if (res.status === 404)
+      return err(new ProviderError("bad_response", false, 404, "model_not_found"));
+    return err(statusToError(res.status, `http_${String(res.status)}`));
+  }
+}

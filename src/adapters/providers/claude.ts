@@ -1,0 +1,114 @@
+// Claude provider — official SDK with injected fetch (tests use a mock fetch; no network).
+import Anthropic from "@anthropic-ai/sdk";
+import type {
+  Chunk,
+  ExtractedDoc,
+  Result,
+  TranslateOptions,
+  TranslatedChunk,
+  TranslatorProvider,
+} from "../../core/index.js";
+import { ProviderError, err, ok, summaryPrompt, translationPrompt } from "../../core/index.js";
+
+export const CLAUDE_DEFAULT_MODEL = "claude-opus-5";
+const MAX_TOKENS = 16000;
+const FALLBACK_BETA = "server-side-fallback-2026-07-01";
+
+export interface ClaudeProviderOptions {
+  apiKey: string;
+  model?: string;
+  fetch?: typeof fetch;
+  maxRetries?: number;
+}
+
+function numericStatus(status: unknown): number | undefined {
+  return typeof status === "number" ? status : undefined;
+}
+
+function toProviderError(e: unknown): ProviderError {
+  if (e instanceof ProviderError) return e;
+  if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
+    return new ProviderError("auth", false, e.status, e.name);
+  }
+  if (e instanceof Anthropic.RateLimitError)
+    return new ProviderError("rate_limit", true, e.status, e.name);
+  if (e instanceof Anthropic.InternalServerError) {
+    return new ProviderError("server", true, numericStatus(e.status), e.name);
+  }
+  if (e instanceof Anthropic.APIConnectionError)
+    return new ProviderError("network", true, undefined, e.name);
+  if (e instanceof Anthropic.APIError) {
+    return new ProviderError("unknown", false, numericStatus(e.status), e.name);
+  }
+  return new ProviderError("unknown", false, undefined, e instanceof Error ? e.name : "unknown");
+}
+
+export class ClaudeProvider implements TranslatorProvider {
+  private readonly client: Anthropic;
+  readonly model: string;
+
+  constructor(opts: ClaudeProviderOptions) {
+    this.model = opts.model ?? CLAUDE_DEFAULT_MODEL;
+    this.client = new Anthropic({
+      apiKey: opts.apiKey,
+      ...(opts.fetch === undefined ? {} : { fetch: opts.fetch }),
+      ...(opts.maxRetries === undefined ? {} : { maxRetries: opts.maxRetries }),
+    });
+  }
+
+  private async complete(system: string, user: string, effort: "low" | "medium"): Promise<string> {
+    let response: Anthropic.Beta.BetaMessage;
+    try {
+      response = await this.client.beta.messages.create({
+        model: this.model,
+        max_tokens: MAX_TOKENS,
+        betas: [FALLBACK_BETA],
+        fallbacks: "default",
+        output_config: { effort },
+        system,
+        messages: [{ role: "user", content: user }],
+      });
+    } catch (e) {
+      throw toProviderError(e);
+    }
+    if (response.stop_reason === "refusal")
+      throw new ProviderError("refusal", false, undefined, "refusal");
+    const text = response.content
+      .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
+    if (text === "") throw new ProviderError("bad_response", true, undefined, "empty_text");
+    if (response.stop_reason === "max_tokens")
+      throw new ProviderError("bad_response", false, undefined, "max_tokens");
+    return text;
+  }
+
+  async translate(chunks: Chunk[], to: string, opts: TranslateOptions): Promise<TranslatedChunk[]> {
+    const out: TranslatedChunk[] = [];
+    for (const chunk of chunks) {
+      const p = translationPrompt(chunk.text, to, opts.sourceLangHint);
+      const text = await this.complete(p.system, p.user, "low");
+      out.push({ index: chunk.index, text });
+      opts.onProgress?.(out.length, chunks.length);
+    }
+    return out;
+  }
+
+  async summarize(doc: ExtractedDoc, to: string): Promise<string> {
+    const p = summaryPrompt(doc, to);
+    return this.complete(p.system, p.user, "medium");
+  }
+
+  async verify(): Promise<Result<void, ProviderError>> {
+    try {
+      await this.client.models.retrieve(this.model);
+      return ok(undefined);
+    } catch (e) {
+      const pe = toProviderError(e);
+      if (e instanceof Anthropic.NotFoundError)
+        return err(new ProviderError("bad_response", false, 404, "model_not_found"));
+      return err(pe);
+    }
+  }
+}
