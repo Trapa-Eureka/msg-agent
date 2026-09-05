@@ -30,13 +30,31 @@
 
 ```bash
 npm install
-npm run check        # typecheck + lint + format:check + test — 공통 게이트
-npm run cli -- init  # 온보딩 3문항 (모국어 / 프로바이더+키 / 메신저+토큰) — T7에서 구현
-npm run cli -- start # long polling 데몬 시작 — T7에서 구현
+npm run cli -- init    # 온보딩 3문항: 모국어 / 프로바이더+API 키 / Telegram 봇 토큰 (즉시 검증)
+npm run cli -- start   # long polling 데몬 — 이후 봇에게 문서를 보내면 같은 대화창에 번역이 올라온다
+```
+
+`npm run cli -- status`는 설정 요약(키·토큰은 가려서)과 봇 연결 상태를 보여준다. 키·토큰은 `.env`(`ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/`TELEGRAM_BOT_TOKEN`) 또는 `~/.message/config.json`(권한 600)에만 저장된다.
+
+### 채팅 명령
+
+| 명령 | 동작 |
+|---|---|
+| (문서 업로드) | 감지 → 모국어가 아니면 번역. 짧으면 채팅에 전문, 길면 요약 + `.md` 파일 |
+| `/full` | 마지막 문서의 전문 번역을 파일로 |
+| `/summary` | 마지막 문서 요약 다시 (+ 파일) |
+| `/mode smart\|full\|summary` | 기본 출력 모드 변경 |
+| `/lang <코드>` | 모국어 변경 (예: `/lang ko`) |
+
+### 검증
+
+```bash
+npm run check   # typecheck + lint + format + test(커버리지 임계치 + 프라이버시 감사)
+npm run smoke -- [--chat <chatId>] [--wait 300]   # 실 봇·실 키로 수동 스모크 (사람 전용, TESTING §5)
 ```
 
 ## 상태
 
 - 2026-09-04: 문서 단계 (코드 미작성). T0부터 시작.
-- 2026-09-05: T0 스캐폴딩 완료 (TS strict·ESLint·Prettier·Vitest·`npm run check`). 다음은 T1.
-- npm 패키지명은 미결 (SPEC §8) — `package.json`은 임시 이름 `message` + `"private": true`. T11에서 이름 확정 시 해제.
+- 2026-09-05: T0~T11 구현 완료 (177+ 테스트, core 커버리지 97%, 프라이버시 감사 포함). 남은 것: 사람이 실 토큰·키로 `npm run smoke` 실행 → 임계치 튜닝 → 패키지명 확정 → npm 공개 (`docs/HUMAN_PREP.md`).
+- npm 패키지명은 미결 — 후보 3개는 SPEC §8 참조. `package.json`은 임시 이름 `message` + `"private": true`이며 사람이 이름을 확정하면 해제한다.

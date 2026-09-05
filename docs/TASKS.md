@@ -66,9 +66,10 @@
 - 완료 기준: [x] 리포트 첨부(`docs/COVERAGE.md`: core 96.9% / lines 97.2%) [x] 감사 테스트가 check에 포함(`tests/privacy-audit.test.ts`) [x] check 통과
 - 결정 기록: `npm run check`의 test 단계를 `vitest run --coverage`로 바꾸고 vitest 임계치(statements/lines/functions 90, branches 80)로 강제 — 임계치 99로 돌려 실패함을 확인 / 감사는 정적(디스크 쓰기 API는 configStore만, console은 cli만, 로거 메타에 본문 키 금지) + 런타임(시그니처 3개, 실 ConsoleLogger·stdout/stderr 스파이, 성공·실패 경로, cwd·설정 디렉터리 무잔류) 두 층 / 감사 테스트는 삭제·완화 금지(WORKFLOW §2)
 
-### T11 — 스모크 + 공개 준비 · 상태: TODO · 의존: T10
+### T11 — 스모크 + 공개 준비 · 상태: DONE(2026-09-05) · 의존: T10
 - 목표: `scripts/smoke.ts`(TESTING §5, 그룹 프라이버시 모드 확인 포함), README 퀵스타트 실명령 갱신, npm 패키지명 후보 3개 조사·기록(퍼블리시는 사람 승인).
-- 완료 기준: [ ] smoke 체크리스트 출력 [ ] README 온보딩 5줄 이내 [ ] 패키지명 후보 SPEC §8에 기록 [ ] check 통과
+- 완료 기준: [x] smoke 체크리스트 출력 [x] README 온보딩 5줄 이내(3줄) [x] 패키지명 후보 SPEC §8에 기록 [x] check 통과
+- 결정 기록: 스모크는 `runStart`를 그대로 조립하고 로거를 감싸 파이프라인 이벤트(doc.received/planned/done)로 체크리스트를 채움 — 본문은 절대 출력하지 않음 / 그룹 프라이버시 모드는 getMe의 `can_read_all_group_messages`로 판정(그룹 업로드 없이 확인 가능) / `--chat`이 있으면 안내 메시지 게시, `--wait`(기본 300초) 동안 문서 1건 대기 / 후보: msg-agent · docslate · chatdoc-translate (+ `@shiz_son/msg-agent`) / **실 스모크 실행·패키지명 확정·publish는 사람 몫(HUMAN_PREP §2·§3)**
 
 ---
 

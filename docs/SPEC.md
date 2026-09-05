@@ -59,7 +59,11 @@
 
 ## 8. 미결 사항
 
-- [ ] npm 패키지명·bin 이름 (message는 선점 가능성 높음 — 공개 전 결정)
+- [ ] npm 패키지명·bin 이름 — `message`는 npm에 선점됨(0.0.1). 2026-09-05 조회 기준 사용 가능 후보(T11):
+  1. `msg-agent` — 저장소 이름과 동일, bin `msg-agent`
+  2. `docslate` — 짧고 브랜드화 가능(document + translate), bin `docslate`
+  3. `chatdoc-translate` — 기능 설명형, bin `chatdoc-translate`
+  - 대안: 스코프 패키지 `@shiz_son/msg-agent`(npm 계정 스코프, 충돌 없음). 확정 시 `package.json`의 `name`·`bin`, `~/.message/` 설정 경로, README 표기를 함께 바꾸고 `private: true`를 해제한다(사람 승인).
 - [ ] 짧은/긴 임계치 기본값(3,000자) — 스모크 후 튜닝
 - [ ] 요약 프롬프트에 문서 유형별 템플릿(계약서/매뉴얼/공지) 둘지 v0.2 검토
 - [ ] Viber 어댑터 시 웹훅 호스팅 권장안(Cloudflare Tunnel vs 배포)

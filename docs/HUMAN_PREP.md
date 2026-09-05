@@ -24,7 +24,7 @@
 
 - [ ] **봇 토큰 발급** — @BotFather `/newbot`. 토큰은 `.env`(`TELEGRAM_BOT_TOKEN`) 또는 `~/.message/config.json`(권한 600)에만 저장. 커밋·로그 출력 금지.
 - [x] **명령 등록** — 불필요해짐(2026-09-05, T5): 어댑터가 `start()` 시 `setMyCommands`로 자동 등록한다. BotFather `/setcommands`는 건너뛴다.
-- [ ] **그룹 프라이버시 모드 해제** — 프라이버시 모드에서는 봇이 그룹의 일반 메시지·파일을 받지 못한다. 그룹에서 쓸 계획이면 `/setprivacy` → Disable. 스모크에서 수신 여부를 재확인해 SPEC/온보딩 문구를 갱신한다(TESTING §5).
+- [ ] **그룹 프라이버시 모드 해제** — 프라이버시 모드에서는 봇이 그룹의 일반 메시지·파일을 받지 못한다. 그룹에서 쓸 계획이면 `/setprivacy` → Disable 후 봇을 그룹에서 제거했다가 다시 초대. `npm run smoke`가 getMe로 해제 여부를 표시한다.
 - [ ] **테스트 대화방** — 1:1 대화 1개 + 봇을 초대한 테스트 그룹 1개.
 
 ### AI 프로바이더
@@ -36,11 +36,12 @@
 
 - [ ] **영어 PDF, 짧은 것 1건** — 추출 텍스트 3,000자 이하 → `inline_full` 경로 확인.
 - [ ] **영어 PDF, 긴 것 1건** — 3,000자 초과 → `summary_plus_file` 경로 확인.
+- [ ] **스모크 실행** — `npm run smoke -- --wait 300` 후 봇에게 PDF 전송, 체크리스트 전부 ✓ 확인. 결과를 보고 `inlineThresholdChars` 3,000 유지 여부 결정(SPEC §8).
 - [ ] 민감하지 않은 문서로 준비한다. 실 채팅에 번역 결과가 게시된다.
 
 ## 3. T11 이후 공개 시점
 
-- [ ] **npm 패키지명 확정** — `message`는 npm에 이미 선점됨(0.0.1 존재, 2026-09-05 확인). T11이 SPEC §8에 기록한 후보 3개 중 선택. 스코프 패키지(`@trapa-eureka/...`)도 후보.
+- [ ] **npm 패키지명 확정** — `message`는 npm에 이미 선점됨(0.0.1 존재, 2026-09-05 확인). T11이 SPEC §8에 기록한 후보 `msg-agent` / `docslate` / `chatdoc-translate` 중 선택(모두 2026-09-05 사용 가능). 스코프 대안 `@shiz_son/msg-agent`.
 - [ ] **bin 이름·설정 경로 통일** — 패키지명 확정에 맞춰 `~/.message/`, CLI 명칭, README 표기를 일괄 갱신.
 - [ ] **npm 계정** — `npm login` 상태, 2FA, publish 권한 확인.
 - [ ] **임계치 기본값 승인** — 스모크 결과를 보고 `inlineThresholdChars` 3,000 유지 여부 결정 (SPEC §8).
