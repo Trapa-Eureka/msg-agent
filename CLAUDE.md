@@ -15,7 +15,7 @@
 ## 명령어
 
 ```bash
-npm run check      # typecheck + lint + format:check + test 일괄 — 태스크 완료의 필수 게이트
+npm run check      # typecheck + lint + format:check + test(커버리지 임계치·프라이버시 감사 포함) — 태스크 완료의 필수 게이트
 npm run test       # vitest run
 npm run typecheck  # tsc --noEmit
 npm run lint       # eslint .

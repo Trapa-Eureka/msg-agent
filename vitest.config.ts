@@ -7,7 +7,10 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/core/**"],
-      reporter: ["text", "html"],
+      reporter: ["text", "json-summary", "html"],
+      reportsDirectory: "coverage",
+      // SPEC §7 / T10: src/core must stay at or above 90% — `npm run check` fails otherwise.
+      thresholds: { statements: 90, lines: 90, functions: 90, branches: 80 },
     },
   },
 });

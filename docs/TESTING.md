@@ -62,4 +62,5 @@
 
 ## 6. 커버리지
 
-- `src/core/` 90% 이상 (T10 리포트). 어댑터·CLI는 스모크 보완.
+- `src/core/` 90% 이상 — vitest 임계치로 `npm run check`에서 강제(statements/lines/functions 90, branches 80). 리포트: `docs/COVERAGE.md`. 어댑터·CLI는 스모크 보완.
+- 프라이버시 감사(`tests/privacy-audit.test.ts`)도 check에 포함: 정적 스캔(디스크 쓰기·console 허용 파일 고정) + 런타임 시그니처 검사(성공·실패 경로). 삭제·완화 금지.
