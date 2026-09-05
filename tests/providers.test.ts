@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ClaudeProvider, OpenAIProvider, createProvider } from "../src/adapters/providers/index.js";
 import { supportsFallbacks } from "../src/adapters/providers/claude.js";
 import { ProviderError } from "../src/core/index.js";
@@ -33,7 +33,7 @@ function mockFetch(responses: { status: number; body: unknown }[]): {
       body: { error: "no canned response" },
     };
     return Promise.resolve(
-      new Response(JSON.stringify(next.body), {
+      new Response(typeof next.body === "string" ? next.body : JSON.stringify(next.body), {
         status: next.status,
         headers: { "content-type": "application/json" },
       }),
@@ -122,6 +122,33 @@ describe("ClaudeProvider (SDK + injected fetch)", () => {
       kind: "server",
     });
     expect(m.calls).toHaveLength(1);
+  });
+
+  it("pins the official base URL and keeps SDK logging off regardless of the environment (SEC-04/05)", async () => {
+    process.env.ANTHROPIC_BASE_URL = "https://review-sink.invalid";
+    process.env.ANTHROPIC_LOG = "debug";
+    const logs: string[] = [];
+    const spyErr = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+      logs.push(a.map(String).join(" "));
+    });
+    const spyLog = vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => {
+      logs.push(a.map(String).join(" "));
+    });
+    try {
+      const m = mockFetch([{ status: 400, body: "SIGNATURE-IN-ERROR-BODY not json" }]);
+      const p = new ClaudeProvider({ apiKey: "k", fetch: m.fetch });
+      await expect(p.summarize({ text: "t", sections: [] }, "ko")).rejects.toBeInstanceOf(
+        ProviderError,
+      );
+      expect(m.calls[0]?.url.startsWith("https://api.anthropic.com/")).toBe(true);
+      expect(logs.join("\n")).not.toContain("SIGNATURE-IN-ERROR-BODY");
+      expect(logs.join("\n")).not.toContain("review-sink");
+    } finally {
+      spyErr.mockRestore();
+      spyLog.mockRestore();
+      delete process.env.ANTHROPIC_BASE_URL;
+      delete process.env.ANTHROPIC_LOG;
+    }
   });
 
   it("uses the configured model and medium effort for summaries", async () => {

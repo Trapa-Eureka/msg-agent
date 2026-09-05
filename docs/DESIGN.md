@@ -135,6 +135,7 @@ zod 스키마로 로드 검증. CLI `status`는 설정 요약 + 봇 연결 상�
 
 - 해석(`resolveSecret`)은 configStore가 담당하며, 해석 실패(env 미설정·빈 값·접두사 없음)는 원인 + 수정 방법("`.env`에 `ANTHROPIC_API_KEY=`를 추가하거나 `init`을 다시 실행")을 담은 오류로 반환한다.
 - 해석된 값은 로그·`status` 출력에 절대 노출하지 않는다. `status`는 `env:ANTHROPIC_API_KEY` / `literal:****` 형태로만 표시한다 (가드레일 4).
+- **파일 안전(R3)**: 저장은 같은 디렉터리의 임시 파일(mode 600, `wx`)에 쓴 뒤 `rename`으로 원자 교체 — 실패 시 원본 보존. 로드는 `lstat`로 심볼릭 링크·비정규 파일을 거절하고, group/other 비트가 있으면 `insecure_permissions`로 거절(수정 방법: `chmod 600`). JSON 파싱 오류는 원문 메시지를 버리고 고정 코드만 출력(비밀값 조각 누출 방지). `.env`는 전체 로드가 아니라 허용 키 3개(`ANTHROPIC_API_KEY`·`OPENAI_API_KEY`·`TELEGRAM_BOT_TOKEN`)만 선택 로드 — `ANTHROPIC_BASE_URL`·`ANTHROPIC_LOG` 같은 SDK 제어 변수는 무시. Claude SDK는 `logLevel: "off"`, `baseURL`을 공식 엔드포인트로 고정.
 - `nativeLang`는 ISO 639-1(2자) 또는 639-3(3자) 소문자 코드. `mode`는 `smart|full|summary`.
 
 ## 7. 환경변수 (.env.example로 커밋 — config 대신 env 참조도 허용)

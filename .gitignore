@@ -13,6 +13,8 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+# local config dir if someone points --config inside the repo
+.msg-agent/
 
 # Editors
 .vscode/

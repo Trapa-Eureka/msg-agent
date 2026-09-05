@@ -11,6 +11,7 @@ import type {
 import { ProviderError, err, ok, summaryPrompt, translationPrompt } from "../../core/index.js";
 
 export const CLAUDE_DEFAULT_MODEL = "claude-sonnet-5";
+export const CLAUDE_BASE_URL = "https://api.anthropic.com";
 const MAX_TOKENS = 16000;
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 /** Server-side refusal fallbacks exist only on the Opus 5 / Fable 5 families; Sonnet 5 rejects the parameter. */
@@ -56,6 +57,9 @@ export class ClaudeProvider implements TranslatorProvider {
     this.model = opts.model ?? CLAUDE_DEFAULT_MODEL;
     this.client = new Anthropic({
       apiKey: opts.apiKey,
+      // R3: never let the environment redirect requests or turn on SDK debug logging (bodies could be logged).
+      baseURL: CLAUDE_BASE_URL,
+      logLevel: "off",
       ...(opts.fetch === undefined ? {} : { fetch: opts.fetch }),
       // Retries belong to the pipeline (one per chunk); the SDK must not add its own (R2 / review 07).
       maxRetries: opts.maxRetries ?? 0,
