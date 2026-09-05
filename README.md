@@ -56,5 +56,5 @@ npm run smoke -- [--chat <chatId>] [--wait 300]   # 실 봇·실 키로 수동 �
 ## 상태
 
 - 2026-09-04: 문서 단계 (코드 미작성). T0부터 시작.
-- 2026-09-05: T0~T11 구현 완료 (177+ 테스트, core 커버리지 97%, 프라이버시 감사 포함). 남은 것: 사람이 실 토큰·키로 `npm run smoke` 실행 → 임계치 튜닝 → 패키지명 확정 → npm 공개 (`docs/HUMAN_PREP.md`).
+- 2026-09-05: T0~T11 구현 완료(178 테스트, core 커버리지 97%, 프라이버시 감사 포함), 실 Telegram 봇 + Claude 스모크 통과, 임계치 3,000 유지, 패키지명 `msg-agent` 확정. 남은 것: 저장소 공개 + `npm publish` (`docs/TASKS.md` 릴리스 체크리스트).
 - npm 패키지명 `msg-agent` 확정(2026-09-05). 공개 후 설치: `npm i -g msg-agent` → `msg-agent init` / `msg-agent start` / `msg-agent status` (개발 중에는 `npm run cli -- <cmd>`).
