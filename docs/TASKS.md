@@ -46,9 +46,10 @@
 - 완료 기준: [x] **TESTING §4 체크리스트 전 항목** (프라이버시·비용 가드 포함) [x] check 통과
 - 결정 기록: 사용자 문구는 `Phrases` 인터페이스(core/phrases.ts, 20개 키)로만 나가고 코어에 리터럴 없음 → T8이 ko/en 구현 / 설정 저장·로그·시계는 `SettingsStore`·`Logger`·`Clock` 포트로 주입 / 번역은 청크당 1호출 + retryable이면 1회 재시도, 실패 시 번역문 미게시 / 채팅별 직렬화 큐 / 진행 알림은 청크 ≥2일 때 최대 4회 / 목 추가: FakePhrases(키 태그 출력), MemorySettings, CapturingLogger, FixedClock, FixtureExtractor(+syntheticDoc)
 
-### T7 — CLI 온보딩·데몬 · 상태: TODO · 의존: T6
+### T7 — CLI 온보딩·데몬 · 상태: DONE(2026-09-05) · 의존: T6
 - 목표: `cli/init`(3문항 대화형 + 키·토큰 즉시 검증), `cli/start`(데몬, 종료 시그널 정리), `cli/status`.
-- 완료 기준: [ ] prompts 주입식 단위 테스트(비대화형 모드) [ ] 검증 실패 시 수정 방법 안내 [ ] check 통과
+- 완료 기준: [x] prompts 주입식 단위 테스트(비대화형 모드) [x] 검증 실패 시 수정 방법 안내 [x] check 통과
+- 결정 기록: 세 명령은 `runInit/runStart/runStatus`(의존성 주입) + `cli/index.ts` 조립(commander·prompts·grammY getMe) / 키·토큰은 환경변수가 있으면 `env:` 참조 제안, 없으면 `literal:` 저장, 검증 실패 시 원인+수정 방법 후 최대 3회 재입력 / 화면 문구는 `cli/text.ts`(ko/en) / `FileSettings`(configStore 래퍼)·`ConsoleLogger`(stderr JSON lines) 어댑터 추가 / 문구 팩은 임시로 `src/phrases/en.ts`만 — **T8이 ko·폴백·스냅샷 추가**
 
 ### T8 — 사용자 문구 팩 · 상태: TODO · 의존: T6
 - 목표: 사용자 대면 메시지(진행·스킵·거절·오류)를 모국어로 렌더 — 최소 ko·en 문구 팩 + 언어 폴백(en).

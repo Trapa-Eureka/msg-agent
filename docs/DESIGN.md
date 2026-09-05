@@ -115,6 +115,12 @@ export type OutputPlan =
 
 zod 스키마로 로드 검증. CLI `status`는 설정 요약 + 봇 연결 상태 출력.
 
+**CLI 조립(src/cli)** — 조립만, 로직 없음. 세 명령은 모두 의존성 주입 함수(`runInit`/`runStart`/`runStatus`)로 구현하고 `cli/index.ts`가 실제 구현(prompts, 실 fetch, grammY getMe)을 꽂는다. 테스트는 스크립트된 응답기·가짜 검증기·FakeMessenger를 꽂아 네트워크 0건.
+- `init`: ① 모국어(자동완성, 이름 또는 코드 → 정규화) ② 프로바이더 선택 + 키 — 환경변수(`.env` 포함)에 이미 있으면 `env:VAR` 참조를 제안, 없으면 입력받아 `literal:`로 저장 → `verify()` 즉시 호출 ③ Telegram 토큰(동일 규칙) → getMe 검증. 검증 실패 시 원인 + 수정 방법을 보여주고 최대 3회 재입력, 초과 시 종료 코드 1. 비밀값은 화면·로그에 절대 출력하지 않는다.
+- `start`: `.env` 로드 → config 로드·시크릿 해석(실패 시 원인+수정 방법, 종료 코드 1) → 프로바이더·추출기·감지기·Telegram 어댑터·`FileSettings`(configStore 래퍼) 조립 → `Pipeline.attach()` → `messenger.start()`. SIGINT/SIGTERM에 `messenger.stop()` 후 종료. 로그는 stderr JSON lines, 메타데이터만.
+- `status`: config 요약(시크릿은 `redactSecretRef`), 파일 권한, 봇 getMe 결과.
+- CLI 화면 문구는 `cli/text.ts`(ko/en, 모국어가 ko면 ko 아니면 en). 메신저 문구 팩(T8)과 별개.
+
 **SecretRef 문법** (`apiKeyRef`·`tokenRef` 공통, 문자열 1개):
 
 | 형태 | 의미 | 비고 |
