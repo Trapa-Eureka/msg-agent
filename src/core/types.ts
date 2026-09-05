@@ -78,12 +78,35 @@ export interface LanguageDetector {
 
 export interface TranslateOptions {
   sourceLangHint?: string;
+  /** Called after each chunk completes — drives the "번역 중… n/m" progress message. */
+  onProgress?: (done: number, total: number) => void;
+}
+
+export type ProviderErrorKind =
+  "auth" | "rate_limit" | "server" | "network" | "bad_response" | "refusal" | "unknown";
+
+/** Thrown by providers. `detail` carries an error name or code only — never document content. */
+export class ProviderError extends Error {
+  readonly kind: ProviderErrorKind;
+  readonly retryable: boolean;
+  readonly status: number | undefined;
+  readonly detail: string | undefined;
+  constructor(kind: ProviderErrorKind, retryable: boolean, status?: number, detail?: string) {
+    super(`provider ${kind}${status === undefined ? "" : ` (${String(status)})`}`);
+    this.name = "ProviderError";
+    this.kind = kind;
+    this.retryable = retryable;
+    this.status = status;
+    this.detail = detail;
+  }
 }
 
 export interface TranslatorProvider {
   translate(chunks: Chunk[], to: string, opts: TranslateOptions): Promise<TranslatedChunk[]>;
   /** Structured summary (title, key clauses, figures, requests) — SPEC §4. */
   summarize(doc: ExtractedDoc, to: string): Promise<string>;
+  /** One cheap call to confirm the credential works (onboarding). Must not spend tokens. */
+  verify(): Promise<Result<void, ProviderError>>;
 }
 
 export interface PlanFile {

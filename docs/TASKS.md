@@ -31,9 +31,10 @@
 - 완료 기준: [x] **TESTING §3 골든 플랜 7종 전부** [x] RTL·CJK 분할 무결성 [x] check 통과
 - 결정 기록: 신뢰도는 franc 점수 차(긴 글에서 0으로 수렴)가 아니라 표본 길이 × 전·후반 일치도로 계산, 기준 0.7 / `sco`(Scots)는 영어 그림자라 무시 / 청크 4,000자 기본, Intl.Segmenter 자소 단위로 하드 분할 / 플래너는 `PlanDecision`만 반환하고 실제 `OutputPlan` 조립은 T6
 
-### T4 (레인 C) — 번역 프로바이더 · 상태: TODO · 의존: T1
+### T4 (레인 C) — 번역 프로바이더 · 상태: DONE(2026-09-05) · 의존: T1
 - 목표: TranslatorProvider 인터페이스 + Claude·OpenAI 어댑터(주입 fetch), FakeTranslator(마커·실패 주입·호출 계수), 번역·요약 프롬프트 템플릿.
-- 완료 기준: [ ] 목 fetch로 요청 형태 검증 [ ] 프롬프트에 "수치·고유명사 보존, 번역문만 출력" 명시 [ ] check 통과
+- 완료 기준: [x] 목 fetch로 요청 형태 검증 [x] 프롬프트에 "수치·고유명사 보존, 번역문만 출력" 명시 [x] check 통과
+- 결정 기록: Claude는 공식 SDK에 `fetch` 주입(요청 형태는 목 fetch로 검증), 기본 `claude-opus-5`·번역 effort low·요약 medium·서버측 fallbacks 적용 / OpenAI는 Chat Completions raw fetch, 기본 `gpt-5` / 오류는 `ProviderError`(kind·retryable·status·detail=오류명만)로 통일, 청크 재시도는 T6 파이프라인 / `verify()`는 models 조회로 토큰 소모 없음 / 프롬프트는 `core/prompts.ts` 한 곳
 
 ### T5 (레인 D) — Telegram 어댑터 + FakeMessenger · 상태: TODO · 의존: T1
 - 목표: grammY 어댑터(문서 이벤트→IncomingDoc, 명령 라우팅, 4,096자 분할 postText, sendDocument), FakeMessenger(동일 분할 규칙).
