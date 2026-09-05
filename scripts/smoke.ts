@@ -51,24 +51,28 @@ type ItemKey =
   | "done"
   | "filePosted";
 const ITEMS: { key: ItemKey; label: string; required: boolean }[] = [
-  { key: "getMe", label: "봇 getMe 응답 (토큰 유효)", required: true },
+  { key: "getMe", label: "Bot getMe responds (token valid)", required: true },
   {
     key: "privacyOff",
-    label: "그룹 프라이버시 모드 해제 (그룹에서 파일 수신 가능)",
+    label: "Group privacy mode off (files receivable in groups)",
     required: false,
   },
-  { key: "providerKey", label: "프로바이더 키 검증", required: true },
+  { key: "providerKey", label: "Provider key verified", required: true },
   {
     key: "providerProbe",
-    label: "프로바이더 실번역 프로브 (1청크, 요청 형태 확인)",
+    label: "Provider translation probe (1 chunk, request shape)",
     required: true,
   },
-  { key: "daemon", label: "데몬 시작 + 명령 자동완성 등록", required: true },
-  { key: "docReceived", label: "문서 수신", required: true },
-  { key: "extracted", label: "텍스트 추출·언어 감지·플랜 결정", required: true },
-  { key: "planned", label: "플랜이 summary_plus_file 또는 inline_full", required: true },
-  { key: "done", label: "번역 완료 및 게시", required: true },
-  { key: "filePosted", label: "긴 문서면 요약 + 파일 첨부 (summary_plus_file)", required: false },
+  { key: "daemon", label: "Daemon started + commands registered", required: true },
+  { key: "docReceived", label: "Document received", required: true },
+  { key: "extracted", label: "Text extracted, language detected, plan decided", required: true },
+  { key: "planned", label: "Plan is summary_plus_file or inline_full", required: true },
+  { key: "done", label: "Translation completed and posted", required: true },
+  {
+    key: "filePosted",
+    label: "Long document: summary + file attached (summary_plus_file)",
+    required: false,
+  },
 ];
 
 class Checklist {
@@ -80,17 +84,19 @@ class Checklist {
     );
   }
   print(): boolean {
-    console.log("\n=== 스모크 체크리스트 ===");
+    console.log("\n=== Smoke checklist ===");
     let allRequired = true;
     for (const item of ITEMS) {
       const s = this.state.get(item.key);
       const mark = s === undefined ? "–" : s.ok ? "✓" : "✗";
       if (item.required && s?.ok !== true) allRequired = false;
       console.log(
-        `${mark} ${item.label}${s?.note === undefined ? "" : ` — ${s.note}`}${item.required ? "" : " (선택)"}`,
+        `${mark} ${item.label}${s?.note === undefined ? "" : ` — ${s.note}`}${item.required ? "" : " (optional)"}`,
       );
     }
-    console.log(allRequired ? "\n결과: 통과" : "\n결과: 미완료 — 위의 ✗/– 항목을 확인하세요.");
+    console.log(
+      allRequired ? "\nResult: PASS" : "\nResult: INCOMPLETE — check the ✗/– items above.",
+    );
     return allRequired;
   }
 }
@@ -181,7 +187,7 @@ async function main(): Promise<number> {
       me.can_read_all_group_messages,
       me.can_read_all_group_messages
         ? "can_read_all_group_messages=true"
-        : "@BotFather → /setprivacy → Disable 후 봇을 그룹에서 제거·재초대",
+        : "@BotFather → /setprivacy → Disable, then remove and re-add the bot to the group",
     );
   } catch (e) {
     list.set("getMe", false, e instanceof Error ? e.name : "error");
@@ -252,10 +258,12 @@ async function main(): Promise<number> {
   if (args.chat !== undefined) {
     await new Bot(token.value).api.sendMessage(
       args.chat,
-      `[smoke] 영어 PDF 1건을 이 대화방에 올려 주세요. ${String(args.wait)}초 동안 기다립니다.`,
+      `[smoke] Please upload one English PDF to this chat. Waiting ${String(args.wait)} s.`,
     );
   }
-  console.log(`\n영어 PDF를 봇(@${username})에게 보내세요. 최대 ${String(args.wait)}초 대기…`);
+  console.log(
+    `\nSend an English PDF to the bot (@${username}). Waiting up to ${String(args.wait)} s…`,
+  );
   const timer = setTimeout(() => {
     finish();
   }, args.wait * 1000);

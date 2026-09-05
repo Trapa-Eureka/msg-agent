@@ -78,7 +78,7 @@ program
 
 program
   .command("init")
-  .description("온보딩 3문항 (모국어 / 프로바이더+키 / 메신저+토큰)")
+  .description("Onboarding: native language, provider + API key, Telegram bot token")
   .action(async () => {
     loadDotEnv();
     process.exitCode = await runInit({
@@ -93,7 +93,7 @@ program
 
 program
   .command("start")
-  .description("long polling 데몬 시작")
+  .description("Start the long-polling daemon")
   .action(async () => {
     loadDotEnv();
     const logger = new ConsoleLogger();
@@ -120,7 +120,7 @@ program
 
 program
   .command("status")
-  .description("설정 요약 + 봇 연결 상태")
+  .description("Show config summary and bot connectivity")
   .action(async () => {
     loadDotEnv();
     process.exitCode = await runStatus({

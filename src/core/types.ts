@@ -85,7 +85,7 @@ export interface LanguageDetector {
 
 export interface TranslateOptions {
   sourceLangHint?: string;
-  /** Called after each chunk completes — drives the "번역 중… n/m" progress message. */
+  /** Called after each chunk completes — drives the "Translating… n/m" progress message. */
   onProgress?: (done: number, total: number) => void;
 }
 

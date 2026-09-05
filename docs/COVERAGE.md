@@ -1,8 +1,8 @@
-# COVERAGE — src/core (T10 리포트)
+# COVERAGE — src/core (T10 report)
 
-생성: 2026-09-05 · 명령: `npm run test:coverage` (`npm run check`에 포함) · 임계치: statements/lines/functions ≥ 90%, branches ≥ 80% (vitest.config.ts) — 미달 시 check 실패
+Generated: 2026-09-05 · Command: `npm run test:coverage` (part of `npm run check`) · Thresholds: statements/lines/functions ≥ 90%, branches ≥ 80% (vitest.config.ts) — the check fails below them
 
-| 파일 | Statements | Branches | Functions | Lines |
+| File | Statements | Branches | Functions | Lines |
 |---|---|---|---|---|
 | **All src/core** | 96.92% | 86.79% | 100% | 97.19% |
 | chunker.ts | 100% | 93.1% | 100% | 100% |
@@ -21,13 +21,15 @@
 | textSplit.ts | 100% | 95.23% | 100% | 100% |
 | types.ts | 100% | 100% | 100% | 100% |
 
-## 프라이버시 감사 (tests/privacy-audit.test.ts, check에 포함)
+Figures above are the T10 snapshot; later tasks (R1–R7) added `route.ts` and kept the total above the thresholds. Re-run the command for current numbers.
 
-- **정적 검사**: `src/` 전체에서 디스크 쓰기 API(writeFile/appendFile/createWriteStream/open 등)는 `adapters/configStore.ts`에서만, `console.*`는 `cli/`에서만 허용. 로거 호출 메타에 `text`/`content`/`body`/`summary`/`parts`/`translated` 키가 있으면 실패.
-- **런타임 시그니처 검사**: 본문에 고유 표식 3개(영문 2, 한글 1)를 심은 문서를 실제 조립 데몬(`runStart` + 실 ConsoleLogger)으로 처리하고 `/full`·`/summary`까지 실행. 채팅에는 표식이 도착해야 하고, stderr 로그·stdout·CLI 출력·config.json·작업 디렉터리·설정 디렉터리에는 표식이 없어야 함. 성공 경로와 프로바이더 반복 실패 경로 모두 검사.
+## Privacy audit (tests/privacy-audit.test.ts, part of check)
 
-## 재생성
+- **Static scan**: across `src/`, disk-write APIs (writeFile/appendFile/createWriteStream/open, …) are allowed only in `adapters/configStore.ts` and `console.*` only in `cli/`. A logger call whose metadata contains a `text` / `content` / `body` / `summary` / `parts` / `translated` key fails the test.
+- **Runtime signature check**: a document seeded with three unique markers (two Latin, one Korean) is processed by the daemon exactly as assembled by `runStart` (with the real ConsoleLogger), including `/full` and `/summary`. The markers must reach the chat and must not appear in stderr logs, stdout, CLI output, config.json, the working directory or the config directory. Both the success path and a repeated-provider-failure path are checked.
+
+## Regenerating
 
 ```bash
-npm run test:coverage        # 텍스트 요약 + coverage/ (html, json-summary; gitignore)
+npm run test:coverage        # text summary + coverage/ (html, json-summary; git-ignored)
 ```

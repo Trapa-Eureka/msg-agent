@@ -1,68 +1,70 @@
-# TESTING — message
+# TESTING — msg-agent
 
-목적: 실제 메신저·실제 LLM 없이 파이프라인 전체를 로컬 결정론으로 검증한다. 번역 품질은 스모크·사용으로 보고, 테스트는 **배관(추출→감지→계획→분할→조립→게시)과 정책(스마트 모드·가드)**을 고정한다.
+Purpose: verify the whole pipeline locally and deterministically without a real messenger or a real LLM. Translation quality is judged by smoke tests and real use; tests pin down **the plumbing (extract → detect → plan → split → assemble → post) and the policy (smart mode, guards)**.
 
-## 1. 원칙
+## 1. Principles
 
-- 테스트 네트워크 호출 0건. 메신저=FakeMessenger, 번역=FakeTranslator, 추출=실 라이브러리(로컬 파일이라 허용) + 픽스처 문서.
-- FakeTranslator는 결정론 마커 변환: `translate` → 각 청크를 `«KO:{원문}»` 형태로 반환, `summarize` → 섹션 제목 나열. 조립 순서·누락을 기계 검증 가능.
-- `npm run check` = typecheck + lint + test. 전체 수 초 내.
+- Zero network calls in tests. Messenger = FakeMessenger, translation = FakeTranslator, extraction = the real libraries (allowed because they read local files) + fixture documents.
+- FakeTranslator is a deterministic marker transform: `translate` returns each chunk as `«KO:{original}»`, `summarize` lists the section titles. Assembly order and omissions are machine-checkable.
+- `npm run check` = typecheck + lint + test. The whole run takes seconds.
 
-## 2. 목·픽스처 구성
+## 2. Mocks and fixtures
 
-| 구성요소 | 내용 |
+| Component | Contents |
 |---|---|
-| `FakeMessenger` | `emitDocument()/emitCommand()`로 이벤트 주입, postText/postFile 호출을 배열에 기록. 4,096자 분할 규칙 포함 구현 |
-| `FakeTranslator` | 마커 변환 + `failOnChunk: n` 실패 주입 + 호출 수 기록(비용 가드 검증) |
-| `FixtureExtractor` | 확장자→고정 ExtractedDoc 매핑 (실 추출기 단위 테스트는 별도) |
-| `FixedClock` | 진행 메시지 타임스탬프 결정론 |
-| fixtures/docs/ | 영어 PDF(짧은/긴)·MD, 스페인어 DOCX, 일본어 TXT, 한국어 PDF(같은 언어 스킵용), 빈 텍스트 PDF(스캔 흉내), 암호 PDF, RTL(아랍어) TXT, 대용량 더미(maxChars 초과용 TXT ~130k자; 20MB 초과는 파일 없이 메타만으로 검증). `npm run fixtures`로 재생성(scripts/fixtures/generate.ts, macOS 폰트 필요) |
+| `FakeMessenger` | Injects events via `emitDocument()` / `emitCommand()`, records postText/postFile calls in an array. Implements the same 4,096-character split rule |
+| `FakeTranslator` | Marker transform + `failOnChunk: n` failure injection + call counting (cost-guard verification) |
+| `FixtureExtractor` | Extension → fixed ExtractedDoc mapping (real-extractor unit tests are separate) |
+| `FixedClock` | Deterministic timestamps for progress messages |
+| fixtures/docs/ | English PDF (short/long) and MD, Spanish DOCX, Japanese TXT, Korean PDF (same-language skip), empty-text PDF (scan lookalike), encrypted PDF, RTL (Arabic) TXT, large dummy (TXT of ~130k chars for the maxChars cap; the 20 MB case is verified from metadata alone, no file). Regenerate with `npm run fixtures` (scripts/fixtures/generate.ts, needs macOS fonts) |
 
-## 3. 골든 플랜 케이스 (outputPlanner 단위)
+## 3. Golden plan cases (outputPlanner unit)
 
-- 2,000자 영어 + 모국어 ko + smart → `inline_full`
-- 30,000자 영어 + smart → `summary_plus_file`
-- 2,000자 + mode=summary → `summary_plus_file`
-- 30,000자 + mode=full(상한 이내) → `file_full` — **full 모드도 임계치 초과면 파일 첨부로 전문 제공**(채팅 도배 방지). 채팅에는 짧은 머리말(`note`)만, 전문은 .md 파일. 이 정책을 케이스로 고정
-- 감지=ko(모국어) → `skip_same_lang`
-- maxChars 초과 → `reject`(요약 제안 문구 포함)
-- 미지원 형식(.xlsx) → `reject`(지원 형식 안내)
+- 2,000 chars English + native ko + smart → `inline_full`
+- 30,000 chars English + smart → `summary_plus_file`
+- 2,000 chars + mode=summary → `summary_plus_file`
+- 30,000 chars + mode=full (within the cap) → `file_full` — **full mode above the threshold still delivers the full text as a file** (no chat flooding). Only a short note (`note`) in the chat, the full text in a .md file. This policy is pinned as a case
+- detected = ko (native) → `skip_same_lang`
+- over maxChars → `reject` (split-file guidance)
+- unsupported format (.xlsx) → `reject` (supported-format guidance)
 
-## 4. 필수 엣지 케이스 체크리스트 (component — 파이프라인) · T6에서 전 항목 테스트화(tests/pipeline.test.ts, 2026-09-05)
+## 4. Mandatory edge-case checklist (component — pipeline) · all items covered in T6 (tests/pipeline.test.ts, 2026-09-05)
 
-**입력·추출**
-- [x] PDF/DOCX/TXT 각 1건 정상 경로 (실 추출기 + 픽스처 파일)
-- [x] 빈 텍스트 PDF(스캔본) → "텍스트를 추출할 수 없음(스캔본은 v0.2 OCR 예정)" 모국어 안내
-- [x] 암호 PDF → 명확한 안내, 크래시 없음
-- [x] 20MB 초과 메타 → 다운로드 시도 없이 reject
+**Input and extraction**
+- [x] One happy path each for PDF/DOCX/TXT (real extractors + fixture files)
+- [x] Empty-text PDF (scan) → native-language notice "no text could be extracted (OCR for scans is planned for v0.2)"
+- [x] Encrypted PDF → clear notice, no crash
+- [x] Metadata over 20 MB → reject without attempting a download
 
-**분할·조립**
-- [x] 섹션 경계 우선 분할, 청크 순서 보존 조립 (마커로 검증)
-- [x] 청크 1개 실패 주입 → 1회 재시도 → 성공 시 완성 / 재실패 시 부분 실패 안내 + 완역 미게시
-- [x] RTL·CJK 텍스트 분할에서 문자 깨짐 없음
+**Splitting and assembly**
+- [x] Section-boundary-first split, order-preserving assembly (verified with markers)
+- [x] One chunk failure injected → one retry → completed on success / partial-failure notice and no translation posted on repeated failure
+- [x] No broken characters when splitting RTL and CJK text
 
-**정책·명령**
-- [x] 골든 플랜 7종(§3) 전부
-- [x] `/full` — 마지막 문서를 `file_full` 플랜으로 재실행(전문 파일 게시), 문서 이력 없으면 안내
-- [x] `/mode`, `/lang` — config 반영·확인 메시지, 잘못된 인자 안내
-- [x] 같은 언어 스킵 1줄 응답
+**Policy and commands**
+- [x] All seven golden plans (§3)
+- [x] `/full` — re-runs the last document as a `file_full` plan (posts the full-text file); notice when there is no document history
+- [x] `/mode`, `/lang` — config updated with a confirmation message; guidance on a bad argument
+- [x] Same-language skip is a one-line reply
 
-**게시·프라이버시**
-- [x] 4,096자 초과 전문 → 문단 경계 분할 다중 postText, 순서 보장
-- [x] 게시 대상 chatId = 수신 chatId 고정 (다른 chatId 게시 시도 시 테스트 실패)
-- [x] 처리 종료 후 임시 버퍼·파일 잔류 없음 / 로그 캡처에 본문 문자열 미포함 (본문 시그니처 문자열로 검사)
-- [x] FakeTranslator 호출 수 ≤ 청크 수 + 요약 1 (중복 호출 = 비용 누수 가드)
+**Posting and privacy**
+- [x] Full text over 4,096 chars → multiple postText calls split at paragraph boundaries, order guaranteed
+- [x] Posting chatId = receiving chatId (a post to any other chatId fails the test)
+- [x] No temporary buffers or files remain after processing / captured logs contain no body strings (checked with body signature strings)
+- [x] FakeTranslator calls ≤ chunks + 1 summary (duplicate calls = cost leak guard)
 
-**동시성**
-- [x] 서로 다른 chat 2건 동시 업로드 → 진행 메시지·결과 혼입 없음
+**Concurrency**
+- [x] Two documents uploaded at once from different chats → no mixed progress messages or results
 
-## 5. 수동 스모크 (사람 전용 — scripts/smoke.ts)
+## 5. Manual smoke (humans only — scripts/smoke.ts)
 
-`npm run smoke -- [--chat <id>] [--wait 300]`: 실 봇 토큰 + 실 프로바이더로 ① getMe(그룹 프라이버시 모드는 `can_read_all_group_messages`로 판정) ② 프로바이더 키 검증 + 실번역 1청크 프로브 ③ 데몬 기동 후 사람이 영어 PDF 업로드 → 파이프라인 이벤트로 체크리스트 채움.
+`npm run smoke -- [--chat <id>] [--wait 300]`: with a real bot token and a real provider ① getMe (group privacy mode judged from `can_read_all_group_messages`) ② provider key verification + a one-chunk real translation probe ③ start the daemon and let the human upload an English PDF → the checklist is filled from pipeline events.
 
-**2026-09-05 첫 실 스모크 결과(통과)**: @docu_translate_bot, Claude `claude-sonnet-5`, 영어 이력서 PDF 67KB·4,755자 → `summary_plus_file`, 요약+`.md` 파일 수신, 55.6초. 프라이버시 모드 해제 확인. 발견·수정: Sonnet 5가 `fallbacks` 파라미터를 거부(400) → 프로바이더 수정 + 프로브 단계 추가.
+**First real smoke, 2026-09-05 (passed)**: @docu_translate_bot, Claude `claude-sonnet-5`, English résumé PDF 67 KB / 4,755 chars → `summary_plus_file`, summary + `.md` file received, 55.6 s. Privacy mode confirmed off. Found and fixed: Sonnet 5 rejects the `fallbacks` parameter (400) → provider fix + the probe step.
 
-## 6. 커버리지
+**Re-run after the review remediation, 2026-09-06 (passed)**: owner pairing via `/start <code>`, cover-letter PDF 2,102 chars → `inline_full`, 23.5 s.
 
-- `src/core/` 90% 이상 — vitest 임계치로 `npm run check`에서 강제(statements/lines/functions 90, branches 80). 리포트: `docs/COVERAGE.md`. 어댑터·CLI는 스모크 보완.
-- 프라이버시 감사(`tests/privacy-audit.test.ts`)도 check에 포함: 정적 스캔(디스크 쓰기·console 허용 파일 고정) + 런타임 시그니처 검사(성공·실패 경로). 삭제·완화 금지.
+## 6. Coverage
+
+- `src/core/` ≥ 90% — enforced by vitest thresholds in `npm run check` (statements/lines/functions 90, branches 80). Report: `docs/COVERAGE.md`. Adapters and CLI are complemented by the smoke.
+- The privacy audit (`tests/privacy-audit.test.ts`) is part of check too: static scan (fixed allow-lists for disk writes and console) + runtime signature check (success and failure paths). Never delete or weaken it.

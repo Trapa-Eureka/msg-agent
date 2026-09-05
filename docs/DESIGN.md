@@ -1,29 +1,29 @@
-# DESIGN — message v0.1
+# DESIGN — msg-agent v0.1
 
-이 문서가 구현의 진실의 원천이다. 파이프라인·인터페이스·출력 정책 변경은 문서 수정이 먼저다.
+This document is the source of truth for the implementation. Changes to the pipeline, interfaces or output policy are made here first.
 
-## 1. 아키텍처
+## 1. Architecture
 
 ```
 Telegram (long polling)                    CLI (init/start/status)
-      │ 파일 업로드 이벤트 / 명령                     │
+      │ file upload events / commands                │
       ▼                                             ▼
 adapters/telegramAdapter (grammY) ──────► core/pipeline.ts
-      ▲  게시(sendMessage/sendDocument)        │
+      ▲  post (sendMessage/sendDocument)       │
       │                                        ├ extractors (pdf/docx/txt)
-      └────────── OutputPlan 실행 ◄────────────┤ detector (franc → 폴백)
-                                               ├ chunker (구조 보존 분할)
+      └────────── execute OutputPlan ◄─────────┤ detector (franc → fallback)
+                                               ├ chunker (structure-preserving split)
                                                ├ TranslatorProvider (claude | openai)
-                                               └ outputPlanner (smart 정책)
+                                               └ outputPlanner (smart policy)
 ```
 
-코어는 메신저·프로바이더 구현을 모른다. 이벤트는 정규화된 `IncomingDoc`/`IncomingCommand`로, 출력은 `OutputPlan`으로만 주고받는다. 실패는 throw 대신 `Result<T, E>`(core/result.ts)로 돌려 사용자 문구를 T8 문구 팩에서 렌더한다.
+The core knows nothing about messenger or provider implementations. Events arrive as normalized `IncomingDoc` / `IncomingCommand`, output leaves only as an `OutputPlan`. Failures are returned as `Result<T, E>` (core/result.ts) instead of thrown, so user-facing wording is rendered from the T8 phrase pack.
 
-## 2. 핵심 인터페이스 (core/types.ts)
+## 2. Core interfaces (core/types.ts)
 
 ```ts
 export interface IncomingDoc {
-  chatId: string; messageId: string; userId?: string;               // userId = 발신자(채널 게시 등 없으면 undefined)
+  chatId: string; messageId: string; userId?: string;               // userId = sender (undefined for channel posts etc.)
   fileName: string; mime: string; sizeBytes: number; download(): Promise<Uint8Array>;
 }
 export interface IncomingCommand { chatId: string; userId?: string; name: "start"|"full"|"summary"|"mode"|"lang"|"allow"|"deny"; arg?: string }
@@ -31,80 +31,80 @@ export interface IncomingCommand { chatId: string; userId?: string; name: "start
 export interface MessengerAdapter {
   onDocument(h: (d: IncomingDoc) => Promise<void>): void;
   onCommand(h: (c: IncomingCommand) => Promise<void>): void;
-  postText(chatId: string, text: string, replyTo?: string): Promise<void>;   // 길이 제한 분할은 어댑터 책임
+  postText(chatId: string, text: string, replyTo?: string): Promise<void>;   // splitting to the length limit is the adapter's job
   postFile(chatId: string, name: string, content: Uint8Array, caption?: string): Promise<void>;
   start(): Promise<void>; stop(): Promise<void>;
 }
 
 export interface DocumentExtractor { supports(mime: string, name: string): boolean; extract(bytes: Uint8Array): Promise<Result<ExtractedDoc, ExtractError>> }
 export type ExtractError =
-  | { kind: "empty_text" }                 // 텍스트 레이어 없음(스캔본) → v0.2 OCR 안내
-  | { kind: "encrypted" }                  // 암호 PDF
-  | { kind: "corrupt"; detail: string };   // 파싱 실패. detail은 라이브러리 오류명만(본문 아님)
-export interface ExtractedDoc { text: string; sections: Section[] }        // 제목/문단 구조 유지. text는 Markdown 풍(제목 `# `, 문단 빈 줄)
-export interface Section { title?: string; level?: number; text: string }   // level = 제목 단계(1~6, 기본 1) — R6
-export interface Chunk { index: number; sectionIndex: number; text: string; sep: string }   // sep = 같은 섹션 안에서 직전 청크와의 원래 구분자("\n\n"·공백·""), 첫 청크는 "" — R6
-export interface TranslatedChunk { index: number; text: string }           // 프로바이더 출력, index로 순서 복원
+  | { kind: "empty_text" }                 // no text layer (scanned) → point to v0.2 OCR
+  | { kind: "encrypted" }                  // password-protected PDF
+  | { kind: "corrupt"; detail: string };   // parse failure; detail is a library error name only (never content)
+export interface ExtractedDoc { text: string; sections: Section[] }        // heading/paragraph structure kept; text is Markdown-flavoured (`# ` headings, blank-line paragraphs)
+export interface Section { title?: string; level?: number; text: string }   // level = heading depth (1–6, default 1) — R6
+export interface Chunk { index: number; sectionIndex: number; text: string; sep: string }   // sep = the original separator before this chunk within its section ("\n\n", whitespace, ""); "" for the first chunk — R6
+export interface TranslatedChunk { index: number; text: string }           // provider output; order restored by index
 
 export interface LanguageDetector { detect(text: string): { lang: string; confidence: number } }
 
 export interface TranslatorProvider {
   translate(chunks: Chunk[], to: string, opts: { sourceLangHint?: string; onProgress?: (done: number, total: number) => void }): Promise<TranslatedChunk[]>;
-  summarize(doc: ExtractedDoc, to: string): Promise<string>;               // 구조 요약 (SPEC §4)
-  verify(): Promise<Result<void, ProviderError>>;                          // init 키 검증 1회 (토큰 소모 없는 models 조회)
+  summarize(doc: ExtractedDoc, to: string): Promise<string>;               // structured summary (SPEC §4)
+  verify(): Promise<Result<void, ProviderError>>;                          // one key check during init (a models lookup that spends no tokens)
 }
-export type ProviderError = { kind: "auth"|"rate_limit"|"server"|"network"|"bad_response"|"refusal"|"unknown"; retryable: boolean; status?: number; detail?: string }  // detail은 오류명·코드만, 본문 금지
+export type ProviderError = { kind: "auth"|"rate_limit"|"server"|"network"|"bad_response"|"refusal"|"unknown"; retryable: boolean; status?: number; detail?: string }  // detail is an error name/code only, never content
 
 export type OutputPlan =
-  | { kind: "inline_full"; parts: string[] }                               // 짧은 문서: 채팅에 전문(분할 게시)
-  | { kind: "summary_plus_file"; summary: string; file: { name: string; content: string } }  // 긴 문서 smart/summary: 요약 + 전문 파일
-  | { kind: "file_full"; note: string; file: { name: string; content: string } }             // 긴 문서 full 모드·`/full`: 짧은 머리말 + 전문 파일
+  | { kind: "inline_full"; parts: string[] }                               // short document: full text in chat (split when posting)
+  | { kind: "summary_plus_file"; summary: string; file: { name: string; content: string } }  // long document, smart/summary: summary + full-text file
+  | { kind: "file_full"; note: string; file: { name: string; content: string } }             // long document in full mode or `/full`: short note + full-text file
   | { kind: "skip_same_lang"; note: string }
-  | { kind: "reject"; reason: string };                                    // 상한 초과·미지원 형식 등
+  | { kind: "reject"; reason: string };                                    // over the caps, unsupported format, etc.
 ```
 
-## 3. 파이프라인 (core/pipeline.ts)
+## 3. Pipeline (core/pipeline.ts)
 
-1. `IncomingDoc` 수신 → 크기·형식 가드 (미지원/초과 → `reject` 플랜, 사유는 모국어 문구)
-2. 진행 알림 게시 → 다운로드 → 추출기 라우팅(`findExtractor`: **MIME만으로 1차 판정**, 어떤 추출기도 MIME을 인식하지 못할 때만 확장자로 2차 판정 — `report.pdf`라는 이름의 DOCX MIME 파일은 DOCX로 간다, R6) → `ExtractedDoc`. 섹션 구조화는 공용 휴리스틱(`core/sections.ts`: Markdown 제목·짧은 무종결 단독 행 = 제목, 빈 줄 = 문단). 파서 사전 검사(R4, SEC-03 부분 대응): DOCX는 ZIP 엔트리 수 ≤ 200·압축 해제 합계 ≤ 60MB를 파싱 전에 확인하고 이미지 변환은 비활성화, PDF는 페이지 수 ≤ 500 확인 후 텍스트 추출, 추출 전체에 60초 기한(초과 시 `corrupt`/timeout — CPU 작업 자체를 끊지는 못하므로 프로세스 격리는 v0.2).
-3. 언어 감지 — franc(`core/detector.ts`). 표본은 문서 **앞·중간·끝 3곳**(각 700자; 짧은 문서는 앞 2,000자를 전·후반으로). 신뢰도 = 표본 글자 수 계수(100자에서 1) × 표본 감지 일치도(전부 일치 1 / 하나 불일치 0.6 / 그 이하 0.4) — 앞부분만 모국어인 혼합 문서는 0.7 미만이 되어 스킵되지 않고 번역 경로로 간다(R6, 검수 10). **0.7 이상**일 때만 감지 언어 = 모국어면 `skip_same_lang`, 미만이면 `sourceLangHint` 없이 번역 프롬프트에 위임. 매크로언어 구성원(arb→ar, cmn→zh 등)은 `core/lang.ts`에서 정규화
-4. `outputPlanner.decidePlan`: 판정 순서 = 미지원 형식 → 바이트 상한(다운로드 전) → 같은 언어(신규 업로드만) → `maxChars` 초과(`/full`·`/summary`도 우회 불가, 파일 분할 안내) → `/summary`·`/full` 요청 → 모드×임계치(임계치 이하 = 짧음, 포함). 결과는 `PlanDecision`(종류·거절 사유만, 내용 없음). **길이 기준은 정규화된 추출 텍스트의 `length`(공백 포함)** — 프로바이더에 실제로 보내는 문자열과 같은 척도(R2; `countChars`는 표시용). 추가 가드(R2): 청크 수 > `maxChunksPerDoc`(기본 50) → 거절, 채팅별 시간당 문서·재실행 수 > `limits.docsPerChatPerHour` → `rateLimited`, 전역 일일 누적 문자 > `limits.dailyChars` → `dailyBudgetExhausted`(모두 메모리 카운터, 메타만).
-5. 전문 경로: `chunker`(섹션 → 문단 → 문장 → 자소 클러스터 순으로 분할, 청크당 기본 4,000자, 각 청크는 섹션 제목을 원래 단계의 `#`로 포함, 섹션 경계는 넘지 않음) → `translate` (진행 상태 n/m 갱신) → `assembleChunks(translated, chunks)`로 순번대로 조립 — 같은 섹션 안 청크는 원래 구분자(`Chunk.sep`)로, 섹션 사이는 빈 줄로 잇는다(누락 청크가 있으면 게시하지 않음) — R6
-6. 요약 경로: `summarize` + 전문 번역은 .md 파일 조립. full 모드에서 임계치 초과면 `file_full`(요약 호출 없이 머리말 + 전문 파일)
-7. 어댑터로 플랜 실행 → 임시 데이터 즉시 폐기 (가드레일 1)
-8. 실패 시: 청크 단위 1회 재시도 → 그래도 실패면 부분 결과 여부를 알리고 모국어 오류 안내
+1. Receive `IncomingDoc` → size/format guards (unsupported or oversize → `reject` plan, reason in the native language)
+2. Post a progress notice → download → extractor routing (`findExtractor`: **first decide by MIME alone**; the extension decides only when no extractor recognizes the MIME — a DOCX-MIME file named `report.pdf` goes to DOCX, R6) → `ExtractedDoc`. Section structuring uses the shared heuristic (`core/sections.ts`: Markdown headings and short single lines without terminal punctuation = headings, blank lines = paragraphs). Parser pre-checks (R4, partial SEC-03 response): DOCX archives must have ≤ 200 ZIP entries and ≤ 60 MB uncompressed before parsing and image conversion is disabled; PDFs must have ≤ 500 pages before text extraction; extraction as a whole has a 60-second deadline (exceeded → `corrupt`/timeout — it cannot stop CPU work itself, so process isolation is v0.2).
+3. Language detection — franc (`core/detector.ts`). Samples come from **three regions: head, middle, tail** (700 chars each; short documents use the first 2,000 chars split in halves). Confidence = sample-letter factor (1 at 100 letters) × agreement between samples (all agree 1 / one disagrees 0.6 / fewer 0.4) — a mixed document whose head is in the native language drops below 0.7 and goes to translation instead of being skipped (R6, review item 10). Only at **≥ 0.7** does "detected = native" produce `skip_same_lang`; below it, translate without a `sourceLangHint` and let the prompt detect. Macrolanguage members (arb→ar, cmn→zh, …) are normalized in `core/lang.ts`.
+4. `outputPlanner.decidePlan`: decision order = unsupported format → byte cap (before download) → same language (new uploads only) → over `maxChars` (`/full` and `/summary` cannot bypass it; ask to split the file) → `/summary` / `/full` requests → mode × threshold (at or below the threshold = short). The result is a `PlanDecision` (kind and rejection reason only, no content). **The length measure is the normalized extracted text's `length` (whitespace included)** — the same measure as what is sent to the provider (R2; `countChars` is for display). Additional guards (R2): chunk count > `maxChunksPerDoc` (default 50) → reject; per-chat documents + re-runs per hour > `limits.docsPerChatPerHour` → `rateLimited`; global daily characters > `limits.dailyChars` → `dailyBudgetExhausted` (all in-memory counters, metadata only).
+5. Full-text path: `chunker` (split section → paragraph → sentence → grapheme cluster, default 4,000 chars per chunk, every chunk carries its section heading at the original `#` level, never crossing a section boundary) → `translate` (progress n/m updates) → `assembleChunks(translated, chunks)` in index order — chunks within a section are joined with their original separator (`Chunk.sep`), sections with a blank line (a missing chunk means nothing is posted) — R6
+6. Summary path: `summarize` + the full translation assembled into a .md file. In full mode above the threshold → `file_full` (short note + full-text file, no summary call)
+7. Execute the plan through the adapter → discard temporary data immediately (guardrail 1)
+8. On failure: one retry per chunk → if it still fails, report whether partial results exist and show a native-language error
 
-**조립 규칙(core/pipeline.ts)**
-- 의존성 주입: `MessengerAdapter`, `DocumentExtractor[]`, `LanguageDetector`, `TranslatorProvider`, `SettingsStore`(config 읽기/저장 — 파일 IO는 어댑터), `phrasesFor(lang) → Phrases`(사용자 문구 팩), `Logger`(메타데이터 전용), `Clock`. 코어에는 문자열 리터럴이 없다 — 모든 사용자 대면 문구는 `Phrases` 키를 통해서만 나간다.
-- 문구 팩(`src/phrases/`): `ko`·`en` 팩이 `satisfies Phrases`로 키 누락 시 컴파일 실패. `phrasesFor(lang)`는 ISO 639 어떤 표기든 정규화해 팩을 고르고 없으면 **en으로 폴백**. 언어 파라미터는 코드로 받고 각 팩이 `Intl.DisplayNames`로 자기 언어의 언어명을 렌더한다("한국어"/"Korean"). 문구는 메타데이터(파일명·개수·코드)만 담는다.
-- 번역 호출은 **청크 1개당 `translate([chunk])` 1회**. 실패 시 `retryable`이면 같은 청크를 1회 재시도, 그래도 실패면 번역문을 전혀 게시하지 않고 `translationFailed(done, total)` 안내. 정상 경로의 프로바이더 호출 수 = 청크 수(+ 요약 1). **재시도 책임은 파이프라인 한 곳** — Claude SDK는 `maxRetries: 0`으로 고정해 청크당 HTTP 요청 최대 2회(R2).
-- 진행 알림: 추출 시작 시 1회, 번역은 청크 수가 2개 이상일 때 시작 시 `0/m`과 이후 약 1/4 지점마다(최대 4회) `n/m`, 요약 시작 시 1회.
-- 채팅별 직렬화: 같은 chatId의 문서·명령은 순서대로 처리하고, 다른 chatId는 동시에 처리한다(진행 메시지 혼입 방지). R5: 전역 동시 처리 채팅 수는 `maxConcurrentChats`(기본 3)로 제한하고, `drain()`으로 진행 중 작업 완료를 기다릴 수 있다. **어댑터는 이벤트를 파이프라인에 넘기고 즉시 반환**(대기하지 않음)해야 polling이 다른 채팅의 업데이트를 계속 받는다.
-- 게시 범위: 모든 게시는 수신 이벤트의 `chatId`로만 호출한다(가드레일 2). 파일명은 `<원본 이름>.<모국어>.md`.
-- 마지막 문서 참조: chatId → `IncomingDoc`(파일 ID 기반 `download()` 클로저 + 메타). 본문·번역문은 플랜 실행 직후 참조를 버린다.
+**Assembly rules (core/pipeline.ts)**
+- Dependency injection: `MessengerAdapter`, `DocumentExtractor[]`, `LanguageDetector`, `TranslatorProvider`, `SettingsStore` (config read/write — file IO lives in an adapter), `phrasesFor(lang) → Phrases` (user phrase pack), `Logger` (metadata only), `Clock`. The core contains no string literals — every user-facing phrase leaves only through a `Phrases` key.
+- Phrase packs (`src/phrases/`): the `ko` and `en` packs use `satisfies Phrases`, so a missing key fails compilation. `phrasesFor(lang)` normalizes any ISO 639 spelling, picks the pack and **falls back to en**. Language parameters are codes; each pack renders language names in its own language via `Intl.DisplayNames` (the Korean pack prints the Korean word for "Korean", the English pack prints "Korean"). Phrases carry metadata only (file names, counts, codes).
+- Translation calls are **one `translate([chunk])` per chunk**. On failure, retry the same chunk once if `retryable`; if it fails again, post no translation at all and report `translationFailed(done, total)`. Provider calls on the happy path = number of chunks (+ 1 summary). **Retries live in the pipeline only** — the Claude SDK is pinned to `maxRetries: 0`, so at most 2 HTTP requests per chunk (R2).
+- Progress notices: once when extraction starts; for translation, `0/m` at the start when there are 2+ chunks and then `n/m` at roughly every quarter (max 4); once when summarization starts.
+- Per-chat serialization: documents and commands for the same chatId run in order; different chatIds run concurrently (no mixed progress messages). R5: the number of chats processed at once is capped by `maxConcurrentChats` (default 3), and `drain()` waits for in-flight work. **The adapter must hand events to the pipeline and return immediately** (no awaiting) so polling keeps receiving other chats' updates.
+- Posting scope: every post uses the `chatId` of the incoming event (guardrail 2). File name is `<original name>.<native language>.md`.
+- Last-document reference: chatId → `IncomingDoc` (a `download()` closure based on the file ID + metadata). Body and translation references are dropped right after the plan executes.
 
-명령 처리: `/full`은 직전 문서 재처리가 아니라 **마지막 문서의 `file_full` 플랜 재실행** — 이를 위해 채팅별로 "마지막 문서 참조(파일 ID·메타만, 내용 아님)"를 메모리에 보관 (프로세스 재시작 시 소멸 — 의도된 동작, 가드레일 1과 일관).
+Command handling: `/full` is not a re-processing of the previous document but a **re-run of the last document's `file_full` plan** — for that, a per-chat "last document reference (file ID and metadata only, never content)" is kept in memory (lost on process restart — intended, consistent with guardrail 1).
 
-`/summary`는 마지막 문서를 `summary_plus_file`로 재실행. `/mode <smart|full|summary>`·`/lang <코드>`는 검증 후 `SettingsStore`에 저장하고 확인 문구(잘못된 인자면 안내 문구). 재실행은 다시 다운로드·추출·번역하므로 비용이 든다(v0.1 허용).
+`/summary` re-runs the last document as `summary_plus_file`. `/mode <smart|full|summary>` and `/lang <code>` validate, save to `SettingsStore` and reply with a confirmation (or guidance on a bad argument). Re-runs download, extract and translate again, so they cost money (accepted in v0.1).
 
-## 4. Telegram 어댑터 메모
+## 4. Telegram adapter notes
 
-- grammY long polling. 문서 핸들러: `message:document` → `IncomingDoc`(메타만). 다운로드는 `download()` 호출 시에만 getFile → 파일 URL fetch. **어댑터 자체가 20MB 초과면 `download()`를 거부**(getFile 호출 없음)하고, 파이프라인은 그 전에 planner의 바이트 가드로 reject한다(이중 방어). R4: getFile 응답의 `file_size`도 검사하고, 본문은 스트림으로 누적하며 상한을 넘는 순간 중단(메타데이터 누락·위조 대비), 요청 전체에 `AbortSignal.timeout`(기본 60초). 파이프라인은 받은 바이트 길이를 다시 확인한다.
-- `postText`는 `link_preview_options: { is_disabled: true }`로 링크 미리보기를 끄고(문서·모델이 낸 URL로의 부수적 외부 접근 차단, SEC-11) 4,096자 제한에 맞춰 분할 게시 — 공용 함수 `core/textSplit.ts`(`splitForMessenger`: 문단 → 줄 → 문장 → 자소 순, 어댑터와 FakeMessenger가 같은 함수 사용), 순서 보장을 위해 순차 전송. 자소 하나가 상한보다 길면(결합 문자 폭탄) 코드포인트 단위로 잘라 **모든 조각 길이 ≤ 상한**을 보장(R2; 청크 분할도 동일). `postFile`은 sendDocument(InputFile from bytes).
-- 명령(`/full`, `/summary`, `/mode`, `/lang`)은 `start()` 시 `setMyCommands`로 등록해 자동완성 노출(BotFather 수동 등록 불필요). 명령 인자는 `ctx.match`.
-- 디스패치·수명(R5): 문서·명령 핸들러는 파이프라인 호출을 `await`하지 않고 진행 중 집합에 넣은 뒤 즉시 반환(grammY는 업데이트를 순차 처리하므로 대기하면 채팅 간 병렬이 깨진다). 핸들러 오류는 `onError(e, fatal=false)`. `start()`는 `bot.init()`(getMe)과 polling 준비(`onStart`)를 기다린 뒤 resolve — 초기화 실패는 `start()` 예외로 전파. 시작 후 polling이 예기치 않게 끝나면 `onError(e, fatal=true)`; CLI는 종료 코드 1로 반영. `stop()`은 polling 중지 후 진행 중 핸들러를 기다린다.
-- 테스트: 네트워크 0건 — `botInfo` 주입으로 getMe 생략, `api.config.use` 트랜스포머로 Bot API 호출을 가로채 요청 형태(method·payload)를 검증, `bot.handleUpdate`로 업데이트 주입, 파일 다운로드는 주입 fetch.
-- 그룹에서는 봇 프라이버시 모드 이슈로 문서 수신만 처리(문서는 프라이버시 모드에서도 수신됨을 스모크로 확인, 아니면 온보딩 안내에 프라이버시 해제 절차 추가).
+- grammY long polling. Document handler: `message:document` → `IncomingDoc` (metadata only). Downloading happens only when `download()` is called: getFile → fetch the file URL. **The adapter itself refuses `download()` above 20 MB** (no getFile call), and the pipeline rejects earlier through the planner's byte guard (defense in depth). R4: the getFile response's `file_size` is checked too, the body is accumulated as a stream and cut off the moment it exceeds the cap (missing or forged metadata), and the body fetch carries `AbortSignal.timeout` (default 60 s). The pipeline re-checks the received byte length.
+- `postText` disables link previews with `link_preview_options: { is_disabled: true }` (no incidental external access to URLs coming from the document or the model, SEC-11) and splits to the 4,096-character limit — shared function `core/textSplit.ts` (`splitForMessenger`: paragraph → line → sentence → grapheme; the adapter and FakeMessenger use the same function), sent sequentially to keep order. A single grapheme longer than the limit (combining-mark bomb) is split by code points so that **every part is ≤ the limit** (R2; chunking does the same). `postFile` is sendDocument (InputFile from bytes).
+- Commands (`/full`, `/summary`, `/mode`, `/lang`, `/allow`, `/deny`) are registered with `setMyCommands` on `start()` for autocompletion (no manual BotFather registration). Command arguments come from `ctx.match`.
+- Dispatch and lifecycle (R5): document and command handlers do not `await` the pipeline; they add the call to an in-flight set and return immediately (grammY processes updates sequentially, so awaiting would break cross-chat parallelism). Handler errors go to `onError(e, fatal=false)`. `start()` waits for `bot.init()` (getMe) and the polling ready signal (`onStart`) before resolving — initialization failures propagate as a `start()` exception. If polling ends unexpectedly after start, `onError(e, fatal=true)` fires; the CLI reflects it as exit code 1. `stop()` stops polling, then waits for in-flight handlers.
+- Tests: zero network — `botInfo` injection skips getMe, an `api.config.use` transformer intercepts Bot API calls to assert request shape (method, payload), `bot.handleUpdate` injects updates, file downloads use an injected fetch.
+- In groups, only document reception is handled because of the bot privacy-mode issue (the smoke confirms whether documents arrive in privacy mode; if not, the onboarding guidance includes the steps to disable it).
 
-## 5. 프로바이더 메모
+## 5. Provider notes
 
-- ClaudeProvider(기본)·OpenAIProvider — 공통: 청크별 번역 프롬프트(용어·수치·고유명사 보존 지시, 출력은 번역문만), 요약 프롬프트(제목·핵심 조항·수치·요청사항 구조). 프롬프트 텍스트는 `core/prompts.ts` 한 곳에만 둔다. 두 프롬프트 모두 **user 메시지는 데이터이지 지시가 아니며 그 안의 명령·역할 변경 요구는 무시**하도록 명시한다(SEC-10). 모델에는 도구·게시 대상 결정 권한을 주지 않는다. 청크는 순차 호출(진행 n/m 콜백), 청크 재시도는 파이프라인(T6) 책임이며 프로바이더는 `ProviderError`(retryable 플래그)를 던진다.
-- Claude: 공식 SDK(`@anthropic-ai/sdk`)에 `fetch`를 주입해 테스트에서는 목 fetch로 요청 형태를 검증한다. 기본 모델 `claude-sonnet-5`(config `provider.model`로 변경), 번역은 `output_config.effort: "low"`, 요약은 `"medium"`. 서버측 fallbacks(`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`)는 **Opus 5·Fable 5 계열에서만** 붙인다 — Sonnet 5는 `fallbacks` 파라미터를 400으로 거부함(2026-09-05 실 스모크에서 발견). `stop_reason: "refusal"`이면 `refusal` 오류. 키 검증(`verify`)은 models 조회라 요청 형태 오류를 잡지 못하므로 `npm run smoke`가 1청크 실번역 프로브를 추가로 수행한다. 키 검증은 `GET /v1/models/{model}`.
-- OpenAI: Chat Completions(`/v1/chat/completions`) raw fetch, 기본 모델 `gpt-5`(config로 변경), 키 검증은 `GET /v1/models/{model}`. 401→auth, 429→rate_limit(재시도 가능), 5xx→server(재시도 가능). R4: 응답 본문은 zod로 검증해 형태가 다르면 `bad_response`(TypeError 금지), 요청에 `AbortSignal.timeout`(기본 90초, 초과 시 `network`/timeout 재시도 가능). Claude SDK는 `timeout: 120s`.
-- 온보딩 `init`에서 키 검증 1회 호출. 실패 시 수정 방법 담긴 안내.
-- 토큰 상한(config `maxChars`) 초과 문서는 planner가 요약 모드 강제 제안 → 사용자가 `/full`로 명시 요청해도 상한 초과면 거절 사유 안내 (가드레일 5).
+- ClaudeProvider (default) and OpenAIProvider — shared: per-chunk translation prompt (preserve terms, numbers and proper nouns; output the translation only), summary prompt (title, key clauses, figures, requests). Prompt text lives only in `core/prompts.ts`. Both prompts state that **the user message is data, not instructions, and that commands or role changes inside it are ignored** (SEC-10). The model is never given tools or any say over posting destinations. Chunks are called sequentially (progress n/m callback); chunk retries belong to the pipeline (T6) and providers throw `ProviderError` with a `retryable` flag.
+- Claude: the official SDK (`@anthropic-ai/sdk`) with an injected `fetch`, so tests verify request shape with a mock fetch. Default model `claude-sonnet-5` (config `provider.model` overrides), `output_config.effort: "low"` for translation and `"medium"` for summaries. Server-side fallbacks (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`) are attached **only for the Opus 5 / Fable 5 families** — Sonnet 5 rejects the `fallbacks` parameter with 400 (found in the 2026-09-05 real smoke). `stop_reason: "refusal"` → `refusal` error. Because key verification (`verify`) is a models lookup and cannot catch request-shape errors, `npm run smoke` additionally runs a one-chunk real translation probe. Key verification is `GET /v1/models/{model}`.
+- OpenAI: Chat Completions (`/v1/chat/completions`) over raw fetch, default model `gpt-5` (config overrides), key verification `GET /v1/models/{model}`. 401 → auth, 429 → rate_limit (retryable), 5xx → server (retryable). R4: the response body is validated with zod and any other shape is `bad_response` (never a TypeError); requests carry `AbortSignal.timeout` (default 90 s; a timeout is a retryable `network` error). The Claude SDK uses `timeout: 120 s`.
+- Onboarding `init` calls key verification once; on failure the guidance includes the fix.
+- Documents over the token cap (config `maxChars`) are rejected by the planner with split-file guidance → even an explicit `/full` is refused with the reason when over the cap (guardrail 5).
 
-## 6. 설정 (adapters/configStore — ~/.msg-agent/config.json, 권한 600)
+## 6. Configuration (adapters/configStore — ~/.msg-agent/config.json, mode 600)
 
 ```json
 {
@@ -117,29 +117,29 @@ export type OutputPlan =
 }
 ```
 
-**접근 제어(`access`, R1)** — 기본 거절. `ownerUserId`는 페어링으로만 설정되고(`/start <코드>`, 코드는 `start`가 터미널에 출력·프로세스 수명 동안 유효·1회 사용), `allowedChatIds`는 페어링 채팅 + 소유자의 `/allow`. 판정: 문서·`/full`·`/summary` = `chatId ∈ allowedChatIds || userId === ownerUserId`; `/mode`·`/lang`·`/allow`·`/deny` = 소유자만. 거절은 응답 없이 `access.denied`(chatId·userId·종류) 로그. 스키마는 strict — 알 수 없는 키는 오류(잘못된 보호 설정 조기 발견).
+**Access control (`access`, R1)** — deny by default. `ownerUserId` is set only by pairing (`/start <code>`; `start` prints the code in the terminal, it is valid for the process lifetime and used once); `allowedChatIds` = the pairing chat + the owner's `/allow`. Decision: documents, `/full`, `/summary` = `chatId ∈ allowedChatIds || userId === ownerUserId`; `/mode`, `/lang`, `/allow`, `/deny` = owner only. Denials produce no reply, just an `access.denied` log (chatId, userId, kind). The schema is strict — unknown keys are errors (a misconfigured protection is caught early).
 
-zod 스키마로 로드 검증. CLI `status`는 설정 요약 + 봇 연결 상태 출력.
+Loaded and validated with the zod schema. CLI `status` prints a config summary plus bot connectivity.
 
-**CLI 조립(src/cli)** — 조립만, 로직 없음. 세 명령은 모두 의존성 주입 함수(`runInit`/`runStart`/`runStatus`)로 구현하고 `cli/index.ts`가 실제 구현(prompts, 실 fetch, grammY getMe)을 꽂는다. 테스트는 스크립트된 응답기·가짜 검증기·FakeMessenger를 꽂아 네트워크 0건.
-- `init`: ① 모국어(10개 고정 select — `cli/init.ts`의 `ONBOARDING_LANGUAGES`, SPEC §3) ② 프로바이더 선택 + 키 — 환경변수(`.env` 포함)에 이미 있으면 `env:VAR` 참조를 제안, 없으면 입력받아 `literal:`로 저장 → `verify()` 즉시 호출 ③ Telegram 토큰(동일 규칙) → getMe 검증. 검증 실패 시 원인 + 수정 방법을 보여주고 최대 3회 재입력, 초과 시 종료 코드 1. 비밀값은 화면·로그에 절대 출력하지 않는다.
-- `start`: `.env` 로드 → config 로드·시크릿 해석(실패 시 원인+수정 방법, 종료 코드 1) → 프로바이더·추출기·감지기·Telegram 어댑터·`FileSettings`(configStore 래퍼) 조립 → `Pipeline.attach()` → `messenger.start()`. SIGINT/SIGTERM에 `messenger.stop()` 후 종료. 로그는 stderr JSON lines, 메타데이터만.
-- `status`: config 요약(시크릿은 `redactSecretRef`), 파일 권한, 봇 getMe 결과.
-- CLI 화면 문구는 `cli/text.ts`(ko/en, 모국어가 ko면 ko 아니면 en). 메신저 문구 팩(T8)과 별개.
+**CLI assembly (src/cli)** — assembly only, no logic. All three commands are dependency-injected functions (`runInit` / `runStart` / `runStatus`) and `cli/index.ts` plugs in the real implementations (prompts, real fetch, grammY getMe). Tests plug in a scripted asker, fake verifiers and FakeMessenger for zero network.
+- `init`: ① native language (fixed select of ten — `ONBOARDING_LANGUAGES` in `cli/init.ts`, SPEC §3) ② provider choice + key — if the environment variable (including `.env`) already exists, offer an `env:VAR` reference, otherwise read the value and store it as `literal:` → call `verify()` immediately ③ Telegram token (same rule) → getMe verification. On verification failure show cause + fix and allow up to 3 attempts, then exit code 1. Secrets are never printed or logged.
+- `start`: load `.env` → load config and resolve secrets (on failure: cause + fix, exit code 1) → assemble provider, extractors, detector, Telegram adapter and `FileSettings` (configStore wrapper) → `Pipeline.attach()` → `messenger.start()`. On SIGINT/SIGTERM, `messenger.stop()` then exit. Logs are stderr JSON lines, metadata only.
+- `status`: config summary (secrets via `redactSecretRef`), file permissions, bot getMe result.
+- CLI screen wording is in `cli/text.ts` (ko/en: Korean when the native language is ko, otherwise English). Separate from the messenger phrase pack (T8).
 
-**SecretRef 문법** (`apiKeyRef`·`tokenRef` 공통, 문자열 1개):
+**SecretRef grammar** (shared by `apiKeyRef` and `tokenRef`, one string):
 
-| 형태 | 의미 | 비고 |
+| Form | Meaning | Notes |
 |---|---|---|
-| `env:<VAR>` | 환경변수 `<VAR>`에서 읽는다 (권장) | `<VAR>`는 `[A-Z_][A-Z0-9_]*`. 셸 환경 또는 CWD의 `.env`(`util.parseEnv`로 허용 키만 선택 로드, 의존성 없음, Node 22.12+) |
-| `literal:<value>` | 값을 config.json에 직접 저장 | 파일 권한 600 전제. `init`이 사용자가 키를 붙여넣고 env 저장을 거부했을 때 사용 |
+| `env:<VAR>` | read from environment variable `<VAR>` (recommended) | `<VAR>` matches `[A-Z_][A-Z0-9_]*`. Shell environment or the CWD `.env` (only allow-listed keys are loaded via `util.parseEnv`, no dependency, Node 22.12+) |
+| `literal:<value>` | store the value directly in config.json | assumes file mode 600. Used by `init` when the user pastes a key and declines env storage |
 
-- 해석(`resolveSecret`)은 configStore가 담당하며, 해석 실패(env 미설정·빈 값·접두사 없음)는 원인 + 수정 방법("`.env`에 `ANTHROPIC_API_KEY=`를 추가하거나 `init`을 다시 실행")을 담은 오류로 반환한다.
-- 해석된 값은 로그·`status` 출력에 절대 노출하지 않는다. `status`는 `env:ANTHROPIC_API_KEY` / `literal:****` 형태로만 표시한다 (가드레일 4).
-- **파일 안전(R3)**: 저장은 같은 디렉터리의 임시 파일(mode 600, `wx`)에 쓴 뒤 `rename`으로 원자 교체 — 실패 시 원본 보존. 로드는 `lstat`로 심볼릭 링크·비정규 파일을 거절하고, group/other 비트가 있으면 `insecure_permissions`로 거절(수정 방법: `chmod 600`). JSON 파싱 오류는 원문 메시지를 버리고 고정 코드만 출력(비밀값 조각 누출 방지). `.env`는 전체 로드가 아니라 허용 키 3개(`ANTHROPIC_API_KEY`·`OPENAI_API_KEY`·`TELEGRAM_BOT_TOKEN`)만 선택 로드 — `ANTHROPIC_BASE_URL`·`ANTHROPIC_LOG` 같은 SDK 제어 변수는 무시. Claude SDK는 `logLevel: "off"`, `baseURL`을 공식 엔드포인트로 고정.
-- `nativeLang`는 ISO 639-1(2자) 또는 639-3(3자) 소문자 코드. `mode`는 `smart|full|summary`.
+- Resolution (`resolveSecret`) belongs to configStore; failures (unset env, empty value, missing prefix) return an error with cause + fix ("add `ANTHROPIC_API_KEY=` to `.env` or re-run `init`").
+- Resolved values are never exposed in logs or `status` output. `status` shows only `env:ANTHROPIC_API_KEY` / `literal:****` (guardrail 4).
+- **File safety (R3)**: saves write to a temp file in the same directory (mode 600, `wx`) and replace atomically with `rename` — the original survives a failure. Loads reject symlinks and non-regular files via `lstat`, and refuse group/other permission bits with `insecure_permissions` (fix: `chmod 600`). JSON parse errors discard the parser message and print a fixed code only (no secret fragments leak). `.env` is not loaded wholesale: only the three allow-listed keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `TELEGRAM_BOT_TOKEN`) — SDK control variables such as `ANTHROPIC_BASE_URL` and `ANTHROPIC_LOG` are ignored. The Claude SDK is created with `logLevel: "off"` and `baseURL` pinned to the official endpoint.
+- `nativeLang` is a lowercase ISO 639-1 (2-letter) or 639-3 (3-letter) code. `mode` is `smart|full|summary`.
 
-## 7. 환경변수 (.env.example로 커밋 — config 대신 env 참조도 허용)
+## 7. Environment variables (committed as .env.example — env references are allowed instead of config values)
 
 ```
 ANTHROPIC_API_KEY=
@@ -147,15 +147,15 @@ OPENAI_API_KEY=
 TELEGRAM_BOT_TOKEN=
 ```
 
-## 8. 확장 경로 (설계만, 구현 금지)
+## 8. Extension paths (design only — do not implement)
 
-- **메신저 추가**: MessengerAdapter 구현 1개 + init 선택지 추가 (Slack=Socket Mode, Viber=웹훅+터널 안내).
-- **MCP 서버(v0.2)**: 같은 core를 `translate_document(path, to)` 도구로 노출 — 조회형 사용은 MCP, 이벤트 자율 처리는 이 에이전트.
+- **Adding a messenger**: one MessengerAdapter implementation + an init choice (Slack = Socket Mode, Viber = webhook + tunnel guidance).
+- **MCP server (v0.2)**: expose the same core as a `translate_document(path, to)` tool — queries go through MCP, autonomous event handling stays with this agent.
 
-## 9. 디렉터리 구조 (목표)
+## 9. Directory layout (target)
 
 ```
-message/
+msg-agent/
   CLAUDE.md  README.md  package.json  .env.example
   docs/  fixtures/docs/  scripts/smoke.ts
   src/{core,adapters,mocks,cli}/

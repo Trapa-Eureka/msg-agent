@@ -9,7 +9,7 @@ coverage/
 *.tsbuildinfo
 npm-debug.log*
 
-# Secrets — 가드레일 4: 키·토큰은 .env와 ~/.msg-agent/config.json(600)에만
+# Secrets — guardrail 4: keys and tokens live only in .env and ~/.msg-agent/config.json (mode 600)
 .env
 .env.*
 !.env.example

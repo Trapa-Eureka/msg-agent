@@ -9,12 +9,12 @@ import { TELEGRAM_MESSAGE_LIMIT, splitForMessenger } from "../core/index.js";
 export const TELEGRAM_MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 export const TELEGRAM_COMMANDS: readonly { command: CommandName; description: string }[] = [
-  { command: "full", description: "마지막 문서 전문 번역을 파일로" },
-  { command: "summary", description: "마지막 문서 요약 다시" },
-  { command: "mode", description: "출력 모드 변경: smart | full | summary" },
-  { command: "lang", description: "모국어 변경 (예: /lang ko)" },
-  { command: "allow", description: "(소유자) 이 대화방 허용" },
-  { command: "deny", description: "(소유자) 이 대화방 허용 해제" },
+  { command: "full", description: "Full translation of the last document as a file" },
+  { command: "summary", description: "Summarize the last document again" },
+  { command: "mode", description: "Set output mode: smart | full | summary" },
+  { command: "lang", description: "Set native language (e.g. /lang ko)" },
+  { command: "allow", description: "(owner) Allow this chat" },
+  { command: "deny", description: "(owner) Revoke this chat" },
 ];
 const COMMAND_NAMES: readonly CommandName[] = [
   "start",

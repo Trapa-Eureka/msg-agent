@@ -1,66 +1,65 @@
-# HUMAN_PREP — 사람(Jin)이 직접 준비할 것
+# HUMAN_PREP — things the human (Jin) prepares personally
 
-작성: 2026-09-05 · 근거: `docs/WORKFLOW.md` §4(자율성의 한계선), `docs/SPEC.md` §3·§7·§8, `docs/DESIGN.md` §4·§7, `docs/TESTING.md` §5
+Written: 2026-09-05 · Basis: `docs/WORKFLOW.md` §4 (limits of autonomy), `docs/SPEC.md` §3·§7·§8, `docs/DESIGN.md` §4·§7, `docs/TESTING.md` §5
 
-에이전트가 대신할 수 없는 항목만 모았다. 시점별로 나누어 해당 태스크 착수 전에 체크한다.
-완료한 항목은 `[x]`로 바꾸고 날짜를 적는다.
+Only items the agent cannot do on the human's behalf. Grouped by when they are needed; check them before starting the related task.
+Mark completed items `[x]` with the date.
 
-## 1. T0 착수 전 (지금)
+## 1. Before T0 (now)
 
-- [x] **저장소 정리** — `.DS_Store`가 첫 커밋에 포함되어 있다. T0의 `.gitignore`에 추가 후 `git rm --cached .DS_Store`로 추적 해제.
-      .gitignore 추가 하고 git rm --cached .DS_Store 실행한다.
-      → 2026-09-05 완료: `.gitignore`(OS·node_modules·dist·coverage·.env) 추가, `.DS_Store` 추적 해제.
-- [x] **저장소 공개 여부 결정** — npm 공개 전까지 비공개 전환 가능(CI·배지·외부 연동 없음, 스타·포크 0). 비공개여도 가드레일 4(키·토큰 커밋 금지)는 그대로 적용.
-      일단 비공개로 설정되어있다.
-      → 2026-09-05 `gh repo view`로 PRIVATE 확인.
-- [x] **LICENSE 선택** — 현재 라이선스 파일 없음. npm 공개 시 필수이므로 MIT 등 미리 결정.
-      MIT 라이선스를 사용한다.
-      → 2026-09-05 완료: 루트에 `LICENSE`(MIT, Copyright (c) 2026 Trapa-Eureka) 추가. T0의 `package.json`에 `"license": "MIT"` 기입 필요.
-- [x] **Node 버전 확인** — 요구사항 Node 22.12+ (R7에서 상향: commander 15가 22.12 이상 요구). 2026-09-05 기준 v24.12.0 / npm 11.6.2 확인 완료.
+- [x] **Repository cleanup** — `.DS_Store` was in the first commit. Add it to `.gitignore` in T0 and untrack it with `git rm --cached .DS_Store`.
+      → Done 2026-09-05: `.gitignore` (OS files, node_modules, dist, coverage, .env) added, `.DS_Store` untracked.
+- [x] **Decide repository visibility** — could stay private until the npm release (no CI, badges or integrations; zero stars/forks). Guardrail 4 (never commit keys/tokens) applies either way.
+      Set to private for now.
+      → 2026-09-05: PRIVATE confirmed with `gh repo view`.
+- [x] **Choose a LICENSE** — no license file existed. Required for an npm release, so decide (MIT, etc.) early.
+      MIT it is.
+      → Done 2026-09-05: `LICENSE` (MIT, Copyright (c) 2026 Trapa-Eureka) added at the root. `"license": "MIT"` to be set in `package.json` during T0.
+- [x] **Check the Node version** — requirement Node 22.12+ (raised in R7: commander 15 needs 22.12+). v24.12.0 / npm 11.6.2 confirmed on 2026-09-05.
 
-## 2. T7(CLI 온보딩)·T11(스모크) 전
+## 2. Before T7 (CLI onboarding) and T11 (smoke)
 
 ### Telegram
 
-- [x] **봇 토큰 발급** — 2026-09-05 완료: `.env`의 `TELEGRAM_BOT_TOKEN`, getMe 확인(@docu_translate_bot). @BotFather `/newbot`. 토큰은 `.env`(`TELEGRAM_BOT_TOKEN`) 또는 `~/.msg-agent/config.json`(권한 600)에만 저장. 커밋·로그 출력 금지.
-- [x] **명령 등록** — 불필요해짐(2026-09-05, T5): 어댑터가 `start()` 시 `setMyCommands`로 자동 등록한다. BotFather `/setcommands`는 건너뛴다.
-- [x] **그룹 프라이버시 모드 해제** — 2026-09-05 스모크에서 can_read_all_group_messages=true 확인(해제 완료). 프라이버시 모드에서는 봇이 그룹의 일반 메시지·파일을 받지 못한다. 그룹에서 쓸 계획이면 `/setprivacy` → Disable 후 봇을 그룹에서 제거했다가 다시 초대. `npm run smoke`가 getMe로 해제 여부를 표시한다.
-- [x] **테스트 대화방** — 1:1 대화로 스모크 완료(2026-09-05), 2026-09-06 소유자 페어링 완료(chat 허용). 그룹은 프라이버시 해제까지 확인, 그룹 업로드 실검증은 선택(`/allow` 후).
+- [x] **Issue the bot token** — done 2026-09-05: `TELEGRAM_BOT_TOKEN` in `.env`, getMe confirmed (@docu_translate_bot). @BotFather `/newbot`. Store the token only in `.env` (`TELEGRAM_BOT_TOKEN`) or `~/.msg-agent/config.json` (mode 600). Never commit or log it.
+- [x] **Register commands** — no longer needed (2026-09-05, T5): the adapter registers them with `setMyCommands` on `start()`. Skip BotFather `/setcommands`.
+- [x] **Disable group privacy mode** — confirmed off in the 2026-09-05 smoke (can_read_all_group_messages=true). In privacy mode the bot does not receive ordinary messages or files in groups. For group use: `/setprivacy` → Disable, then remove the bot from the group and re-add it. `npm run smoke` shows the state via getMe.
+- [x] **Test chats** — smoke done in a 1:1 chat (2026-09-05); owner pairing done 2026-09-06 (chat allowed). Groups: privacy mode confirmed off; a real group upload is optional (after `/allow`).
 
-### AI 프로바이더
+### AI provider
 
-- [x] **Anthropic API 키** (기본 프로바이더) — 2026-09-05 완료: `.env`의 `ANTHROPIC_API_KEY`, models 조회로 검증 OK. 크레딧 잔액 확인. `.env`의 `ANTHROPIC_API_KEY`.
-- [x] **OpenAI API 키** (선택) — 2026-09-05 완료: `.env`의 `OPENAI_API_KEY`, models 조회로 검증 OK. OpenAI 어댑터까지 실검증하려면 필요. `.env`의 `OPENAI_API_KEY`.
+- [x] **Anthropic API key** (default provider) — done 2026-09-05: `ANTHROPIC_API_KEY` in `.env`, verified with a models lookup. Check the credit balance.
+- [x] **OpenAI API key** (optional) — done 2026-09-05: `OPENAI_API_KEY` in `.env`, verified with a models lookup. Only needed to exercise the OpenAI adapter for real.
 
-### 스모크용 실제 문서 (SPEC §7)
+### Real documents for the smoke (SPEC §7)
 
-- [x] **영어 PDF, 짧은 것 1건** — 2026-09-06 완료: 커버레터 PDF 2,102자 → `inline_full`(채팅에 전문), 23.5초.
-- [x] **영어 PDF, 긴 것 1건** — 2026-09-05 완료: 4,755자 이력서 → 요약 + 파일.
-- [x] **스모크 실행** — 2026-09-05 통과: 영어 PDF(4,755자) → summary_plus_file, 요약+파일 수신, 55.6초. 2026-09-06 검수 대응(R1~R7) 후 재실행 통과: 페어링(`/start <코드>` → access.paired) 완료, 짧은 PDF inline_full 경로 확인. 체크리스트 전부 ✓.
-- [x] 민감하지 않은 문서로 준비한다. 실 채팅에 번역 결과가 게시된다.
+- [x] **One short English PDF** — done 2026-09-06: cover-letter PDF, 2,102 chars → `inline_full` (full text in chat), 23.5 s.
+- [x] **One long English PDF** — done 2026-09-05: 4,755-char résumé → summary + file.
+- [x] **Run the smoke** — passed 2026-09-05: English PDF (4,755 chars) → summary_plus_file, summary + file received, 55.6 s. Re-run after the review remediation (R1–R7) passed on 2026-09-06: pairing (`/start <code>` → access.paired) done, short-PDF inline_full path confirmed. Every checklist item ✓.
+- [x] Use non-sensitive documents — translations are posted to a real chat.
 
-## 3. T11 이후 공개 시점
+## 3. Release, after T11
 
-- [x] **npm 패키지명 확정** — `msg-agent`(2026-09-05 결정). SPEC §8 기록.
-- [x] **bin 이름·설정 경로 통일** — 2026-09-05 완료: bin `msg-agent`, 설정 `~/.msg-agent/config.json`, CLI 명칭·README 갱신, `package.json`의 `private` 해제(publish는 여전히 사람이 `npm publish`로만).
-- [x] **npm 계정** — shiz_son 로그인, 2FA 확인 완료(2026-09-06, publish에 OTP 불필요 모드).
-- [x] **임계치 기본값 승인** — 2026-09-05 3,000 유지 결정(SPEC §8).
-- [x] **히스토리 점검** — 2026-09-05 전체 커밋 스캔(sk-ant-/sk-proj-/봇 토큰 패턴) 0건. `.env`는 추적된 적 없음.
-- [x] **저장소 공개 전환** — 2026-09-06 사용자가 전환, `gh repo view`로 PUBLIC 확인.
+- [x] **npm package name** — `msg-agent` (decided 2026-09-05). Recorded in SPEC §8.
+- [x] **Unify bin name and config path** — done 2026-09-05: bin `msg-agent`, config `~/.msg-agent/config.json`, CLI name and README updated, `private` removed from `package.json` (publishing still happens only via a human `npm publish`).
+- [x] **npm account** — logged in as shiz_son; 2FA confirmed 2026-09-06 (account shows "Enabled for authorization and publishing", one security key).
+- [x] **Approve the threshold default** — kept at 3,000 on 2026-09-05 (SPEC §8).
+- [x] **History check** — full commit scan on 2026-09-05 (sk-ant- / sk-proj- / bot-token patterns): 0 hits. `.env` was never tracked.
+- [x] **Make the repository public** — switched by the user on 2026-09-06, PUBLIC confirmed with `gh repo view`.
   ```bash
   gh repo edit Trapa-Eureka/msg-agent --visibility public --accept-visibility-change-consequences
   ```
-- [x] **npm publish** — 2026-09-06 완료: `msg-agent@0.1.0` 게시(80.9 kB, 138 files), 태그 `v0.1.0` 푸시, `npx msg-agent@0.1.0 --version` → 0.1.0 확인. `prepublishOnly`(check + build + tarball 검사) 통과.
+- [x] **npm publish** — done 2026-09-06: `msg-agent@0.1.0` published (80.9 kB, 138 files), tag `v0.1.0` pushed, `npx msg-agent@0.1.0 --version` → 0.1.0. `prepublishOnly` (check + build + tarball check) passed.
   ```bash
   cd /Volumes/DevWork/work/msg-agent
-  npm publish            # 2FA면 OTP 입력
+  npm publish            # enter the OTP / touch the security key if 2FA asks
   git tag v0.1.0 && git push origin v0.1.0
   ```
-  게시 후 확인: `npx msg-agent@0.1.0 --version` → `0.1.0`
+  After publishing: `npx msg-agent@0.1.0 --version` → `0.1.0`
 
-## 4. 항상 사람이 잡는 것 (WORKFLOW §4 요약)
+## 4. Always human-owned (summary of WORKFLOW §4)
 
-- 실 봇 토큰·API 키 관리와 스모크 실행 (실 채팅 게시 발생)
-- npm 퍼블리시·패키지명 확정
-- 출력 모드 정책·임계치 기본값 변경 승인
-- 신규 메신저 어댑터 착수 순서 (SPEC §2 표)
+- Managing real bot tokens and API keys, and running smoke tests (they post to real chats)
+- npm publishing and the package name
+- Approving output-mode policy and threshold default changes
+- The order in which new messenger adapters are started (SPEC §2 table)

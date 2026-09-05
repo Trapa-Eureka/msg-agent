@@ -2,67 +2,78 @@
 
 [![npm](https://img.shields.io/npm/v/msg-agent)](https://www.npmjs.com/package/msg-agent) · Node.js 22.12+ · MIT
 
-메신저 대화창에 올라온 **외국어 문서를 내 모국어로 자동 번역해주는 개인용 AI Agent**.
+A **personal AI agent that auto-translates foreign-language documents posted in a messenger chat into your native language**.
 
-- 대화창에 문서 파일(PDF·DOCX·TXT/MD)이 업로드되면 → 언어 감지 → 모국어가 아니면 자동 번역 → 같은 대화창에 결과 게시.
-- 출력은 **스마트 모드**가 기본: 짧은 문서는 전문을 채팅에, 긴 문서는 **모국어 요약을 채팅에 + 전문 번역을 파일 첨부**로. `/full` `/summary` `/mode` 명령으로 전환.
-- 온보딩은 npm 설치 후 CLI 3문항: ① 모국어(전체 언어) ② AI 프로바이더 + API 키(기본 Claude, OpenAI 지원) ③ 메신저 + 토큰.
-- **v0.1 메신저는 Telegram.** 이유: long polling이라 공개 URL·서버 없이 노트북에서 바로 돌고, 봇 발급에 심사가 없으며, 파일 API가 단순하다(봇 다운로드 한도 20MB). 메신저는 `MessengerAdapter` 인터페이스 뒤에 있어 Slack(v0.2, Socket Mode) → Viber(v0.3, 필리핀 시장) → Discord/WhatsApp/Teams 순으로 어댑터만 추가한다.
+- When a document file (PDF, DOCX, TXT/MD) is uploaded to a chat → detect the language → translate if it is not your native language → post the result in the same chat.
+- Output defaults to **smart mode**: short documents get the full translation in the chat; long documents get a **native-language summary in the chat plus the full translation as a file attachment**. Switch with `/full`, `/summary`, `/mode`.
+- Onboarding after `npm install` is three CLI questions: ① native language ② AI provider + API key (Claude by default, OpenAI supported) ③ messenger + token.
+- **v0.1 messenger is Telegram.** Why: long polling runs on a laptop without a public URL or server, bot tokens need no review, and the file API is simple (20 MB bot download limit). Messengers sit behind the `MessengerAdapter` interface, so Slack (v0.2, Socket Mode) → Viber (v0.3, Philippine market) → Discord/WhatsApp/Teams are added as adapters only.
 
-정체성: 본체는 **Agent**(업로드 이벤트 → 자율 처리)다. MCP 서버는 v0.2에서 같은 코어를 `translate_document` 도구로 노출하는 부가물이다 — "조회는 MCP, 이벤트 자율 처리는 Agent" 원칙 그대로.
+Identity: the product is an **Agent** (upload event → autonomous processing). An MCP server in v0.2 will expose the same core as a `translate_document` tool — "queries go through MCP, autonomous event handling is the Agent's job".
 
-## 문서 맵
+## Document map
 
-| 문서 | 내용 | 읽는 시점 |
+| Document | Contents | When to read |
 |---|---|---|
-| `CLAUDE.md` | 에이전트 스티어링 — 스택, 명령어, 규칙, 가드레일 | 모든 에이전트 세션 시작 시 (자동 로드) |
-| `docs/SPEC.md` | 제품 스펙 — 온보딩, 출력 모드 결정 근거, 로드맵 | 기능 논의·범위 판단 전 |
-| `docs/DESIGN.md` | 기술 설계 — 파이프라인, 인터페이스, Telegram 제약, CLI | 구현 전 필독 |
-| `docs/TESTING.md` | 테스트 전략 — 페이크 메신저/번역기, 엣지 케이스 | 테스트 작성 전 |
-| `docs/TASKS.md` | 태스크 백로그 — 에이전트 실행 단위, 완료 기준 | 작업 배정 시 |
-| `docs/WORKFLOW.md` | AI-native 개발 규칙 (공통 + 이 레포 특이사항) | 최초 1회 + 운영 중 참조 |
-| `docs/HUMAN_PREP.md` | 사람이 직접 준비할 항목 체크리스트 (토큰·키·문서·공개 절차) | 태스크 착수 전 |
-| `docs/COVERAGE.md` | core 커버리지 리포트 + 프라이버시 감사 요약 | T10 이후 참조 |
+| `CLAUDE.md` | Agent steering — stack, commands, rules, guardrails | Start of every agent session (auto-loaded) |
+| `docs/SPEC.md` | Product spec — onboarding, output-mode rationale, roadmap | Before feature discussions and scope decisions |
+| `docs/DESIGN.md` | Technical design — pipeline, interfaces, Telegram constraints, CLI | Required before implementing |
+| `docs/TESTING.md` | Test strategy — fake messenger/translator, edge cases | Before writing tests |
+| `docs/TASKS.md` | Task backlog — agent execution units, completion criteria | When assigning work |
+| `docs/WORKFLOW.md` | AI-native development rules (shared + repo-specific) | Once at the start, then as reference |
+| `docs/HUMAN_PREP.md` | Checklist of things only a human can prepare (tokens, keys, documents, release steps) | Before starting a task |
+| `docs/COVERAGE.md` | Core coverage report + privacy audit summary | After T10 |
+| `docs/001_CODE_REVIEW.md`, `docs/002_SECURITY_REVIEW.md` | Full code and security review findings (2026-09-05) and their remediation status | When touching the reviewed areas |
 
-## 개발 방식
+## Development approach
 
-앞선 세 레포와 동일: **문서 → 에이전트 구현 → 검증**. 사람(Jin)은 스펙·리뷰·실토큰 스모크·npm 공개 승인, 구현은 Claude Code가 `docs/TASKS.md` 단위로. 공통 게이트는 `npm run check`.
+Same as the previous three repos: **documents → agent implementation → verification**. The human (Jin) owns spec, review, real-token smoke tests and npm release approval; Claude Code implements one `docs/TASKS.md` task at a time. The shared gate is `npm run check`.
 
-## 퀵스타트
+## Quick start
 
 ```bash
-# Node.js 22.12 이상
+# Node.js 22.12 or newer
 npm install
-npm run cli -- init    # 온보딩 3문항: 모국어 / 프로바이더+API 키 / Telegram 봇 토큰 (즉시 검증)
-npm run cli -- start   # 데몬 시작 — 터미널의 6자리 코드를 봇에게 `/start <코드>`로 보내 소유자 등록(최초 1회)
+npm run cli -- init    # onboarding: native language / provider + API key / Telegram bot token (verified immediately)
+npm run cli -- start   # start the daemon — send the six-digit code from the terminal to the bot as `/start <code>` to register as owner (once)
 ```
 
-`npm run cli -- status`는 설정 요약(키·토큰은 가려서)과 봇 연결 상태를 보여준다. 키·토큰은 `.env`(`ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/`TELEGRAM_BOT_TOKEN`) 또는 `~/.msg-agent/config.json`(권한 600)에만 저장된다.
+`npm run cli -- status` prints a config summary (keys and tokens redacted) and the bot connection state. Keys and tokens are stored only in `.env` (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `TELEGRAM_BOT_TOKEN`) or in `~/.msg-agent/config.json` (mode 600).
 
-### 채팅 명령
+After the npm release, install globally instead: `npm i -g msg-agent` → `msg-agent init` / `msg-agent start` / `msg-agent status`.
 
-| 명령 | 동작 |
+### Chat commands
+
+| Command | Effect |
 |---|---|
-| (문서 업로드) | 감지 → 모국어가 아니면 번역. 짧으면 채팅에 전문, 길면 요약 + `.md` 파일 |
-| `/full` | 마지막 문서의 전문 번역을 파일로 |
-| `/summary` | 마지막 문서 요약 다시 (+ 파일) |
-| `/mode smart\|full\|summary` | 기본 출력 모드 변경 |
-| `/lang <코드>` | 모국어 변경 (예: `/lang ko`) |
-| `/start <코드>` | 페어링: 터미널에 표시된 코드로 소유자 등록 (최초 1회) |
-| `/allow` · `/deny` | (소유자) 현재 대화방 허용 / 해제 |
+| (upload a document) | Detect → translate if not the native language. Short: full text in chat; long: summary + `.md` file |
+| `/full` | Full translation of the last document as a file |
+| `/summary` | Summarize the last document again (+ file) |
+| `/mode smart\|full\|summary` | Change the default output mode |
+| `/lang <code>` | Change the native language (e.g. `/lang ko`) |
+| `/start <code>` | Pairing: register as owner with the code shown in the terminal (once) |
+| `/allow` · `/deny` | (owner) Allow / revoke the current chat |
 
-봇은 페어링된 소유자와 허용된 대화방의 문서만 처리한다. 그 외 사용자의 문서·명령은 응답 없이 무시된다.
+The bot only processes documents from the paired owner and from allowed chats. Documents and commands from anyone else are ignored without a reply.
 
-### 검증
+### Security notes for users
+
+- **Your keys stay yours.** The package never ships credentials. On `init` you enter your own Anthropic/OpenAI API key and your own Telegram bot token; they are stored only in `.env` or `~/.msg-agent/config.json` (mode 600) and every API cost is billed to your account.
+- **Nobody can use your bot until you pair it.** `start` prints a one-time six-digit code; send `/start <code>` to the bot from your own Telegram account. Documents and commands from anyone else are ignored silently. Use `/allow` in a group (as the owner) to let that group submit documents, `/deny` to revoke.
+- **Rotate a leaked token.** In @BotFather run `/revoke` (or `/token`) to invalidate the old bot token, then re-run `init` or update `.env`. Rotate API keys in the provider console the same way.
+- **Document content is never written to disk or logs.** Only metadata (file name, size, language, timings) is logged; an automated privacy audit enforces this on every `npm run check`.
+- **For maintainers publishing to npm:** keep the npm account on two-factor authentication in "authorization and publishing" mode (a security key or an authenticator app), store the recovery codes safely, and note that `prepublishOnly` refuses to publish if the tarball would contain secret files or key-like strings.
+
+### Verification
 
 ```bash
-npm run check   # typecheck + lint + format + test(커버리지 임계치 + 프라이버시 감사)
-npm run smoke -- [--chat <chatId>] [--wait 300]   # 실 봇·실 키로 수동 스모크 (사람 전용, TESTING §5)
+npm run check   # typecheck + lint + format + test (coverage thresholds + privacy audit)
+npm run smoke -- [--chat <chatId>] [--wait 300]   # manual smoke with a real bot and real keys (humans only, TESTING §5)
 ```
 
-## 상태
+## Status
 
-- 2026-09-04: 문서 단계 (코드 미작성). T0부터 시작.
-- 2026-09-05: T0~T11 구현 완료, 실 Telegram 봇 + Claude 스모크 통과, 임계치 3,000 유지, 패키지명 `msg-agent` 확정.
-- 2026-09-06: 코드·보안 검수 대응 R1~R7 완료(214 테스트), 재스모크 통과. **v0.1.0 npm 공개**: https://www.npmjs.com/package/msg-agent (`npm i -g msg-agent@0.1.0`), 태그 `v0.1.0`, 저장소 공개.
-- npm 패키지명 `msg-agent` 확정(2026-09-05). 공개 후 설치: `npm i -g msg-agent` → `msg-agent init` / `msg-agent start` / `msg-agent status` (개발 중에는 `npm run cli -- <cmd>`).
+- 2026-09-04: documentation phase (no code). Starting from T0.
+- 2026-09-05: T0–T11 implemented, real Telegram bot + Claude smoke passed, threshold kept at 3,000, package name `msg-agent` decided.
+- 2026-09-06: code and security review remediation R1–R7 done (214 tests), smoke re-passed. **v0.1.0 published to npm**: https://www.npmjs.com/package/msg-agent (`npm i -g msg-agent@0.1.0`), tag `v0.1.0`, repository public.
+- 2026-09-06: all documentation and in-code comments/CLI text translated to English (Korean remains only as the product's Korean phrase pack and test fixtures); published as v0.1.1.
