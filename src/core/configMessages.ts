@@ -130,28 +130,56 @@ export function explainConfigError(error: ConfigError, lang: MessageLang): Expla
             }
           : { cause: `Config file not found: ${error.path}`, fix: `Run ${INIT_CMD} to onboard.` },
       ];
-    case "unreadable":
+    case "unreadable": {
+      const detail = error.detail;
+      if (detail === "symlink" || detail === "not_regular_file") {
+        return [
+          ko
+            ? {
+                cause: `설정 경로가 일반 파일이 아닙니다(심볼릭 링크 등): ${error.path}`,
+                fix: "링크를 지우고 실제 파일을 두세요. 필요하면 init을 다시 실행하세요.",
+              }
+            : {
+                cause: `Config path is not a regular file (symlink?): ${error.path}`,
+                fix: "Remove the link and keep a real file there, or re-run init.",
+              },
+        ];
+      }
+      if (detail === "insecure_permissions") {
+        return [
+          ko
+            ? {
+                cause: `설정 파일 권한이 느슨합니다(다른 계정이 읽을 수 있음): ${error.path}`,
+                fix: `chmod 600 ${error.path} 를 실행한 뒤 다시 시도하세요.`,
+              }
+            : {
+                cause: `Config file permissions are too permissive, readable by other accounts: ${error.path}`,
+                fix: `Run chmod 600 ${error.path} and try again.`,
+              },
+        ];
+      }
       return [
         ko
           ? {
-              cause: `설정 파일을 읽을 수 없습니다: ${error.path} (${error.detail})`,
-              fix: "파일 권한(600)과 소유자를 확인하세요.",
+              cause: `설정 파일을 읽거나 쓸 수 없습니다: ${error.path} (${detail})`,
+              fix: "파일·디렉터리 권한(600/700)과 소유자를 확인하세요.",
             }
           : {
-              cause: `Cannot read config file: ${error.path} (${error.detail})`,
-              fix: "Check the file's permissions (600) and owner.",
+              cause: `Cannot read or write config file: ${error.path} (${detail})`,
+              fix: "Check the file and directory permissions (600/700) and owner.",
             },
       ];
+    }
     case "invalid_json":
       return [
         ko
           ? {
-              cause: `설정 파일이 올바른 JSON이 아닙니다: ${error.path} (${error.detail})`,
-              fix: `파일을 고치거나 ${INIT_CMD} 로 다시 생성하세요.`,
+              cause: `설정 파일이 올바른 JSON이 아닙니다: ${error.path}`,
+              fix: `파일을 고치거나 ${INIT_CMD} 로 다시 생성하세요. (오류 원문은 비밀값 보호를 위해 표시하지 않습니다)`,
             }
           : {
-              cause: `Config file is not valid JSON: ${error.path} (${error.detail})`,
-              fix: `Fix the file or regenerate it with ${INIT_CMD}.`,
+              cause: `Config file is not valid JSON: ${error.path}`,
+              fix: `Fix the file or regenerate it with ${INIT_CMD}. (Parser text is withheld to protect secrets.)`,
             },
       ];
     case "invalid":

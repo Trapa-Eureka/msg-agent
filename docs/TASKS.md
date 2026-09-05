@@ -89,9 +89,10 @@
 - 완료 기준: [x] 공백 우회 케이스 reject(399,400자 → rejectOverMax) [x] 529 목에서 청크당 요청 ≤ 2(SDK maxRetries 0 → 시도당 1회) [x] 자소 4,201자 케이스 길이 ≤ 4,096 [x] check 통과
 - 결정 기록: 비용 척도 = 정규화 텍스트 `length`(공백 포함) / `maxChunksPerDoc` 기본 50(파이프라인 옵션) / `limits`(strict) 기본 20건/시·1,000,000자/일, 재실행 명령도 건수에 포함, 요약 경로는 문자 2배 청구 / 상한 초과 안내는 `/summary` 제안 대신 파일 분할 안내(11번 해결) / OpenAI `max_completion_tokens` 16000 / 자소가 상한보다 길면 코드포인트 분할(길이 불변식 > 자소 무결성)
 
-### R3 — 비밀값·설정 파일 안전 · 상태: TODO · [03, 12, SEC-04, SEC-05, SEC-06, SEC-07, SEC-13]
+### R3 — 비밀값·설정 파일 안전 · 상태: DONE(2026-09-06) · [03, 12, SEC-04, SEC-05, SEC-06, SEC-07, SEC-13]
 - 목표: JSON 오류 원문 미출력(고정 코드), 원자적 저장(임시 600 → rename), 로드 시 심볼릭 링크·느슨한 권한 거절, `.env`는 허용 키 3개만 선택 로드, Claude SDK `logLevel: "off"` + 공식 baseURL 고정, `.gitignore`에 `.msg-agent/`.
-- 완료 기준: [ ] 시그니처 포함 잘못된 JSON 출력 누출 0 [ ] 저장 실패 시 원본 보존 [ ] `ANTHROPIC_BASE_URL`·`ANTHROPIC_LOG` 무시 [ ] check 통과
+- 완료 기준: [x] 시그니처 포함 잘못된 JSON 출력 누출 0 [x] 저장 실패 시 원본 보존(디렉터리 500으로 쓰기 실패 주입) [x] `ANTHROPIC_BASE_URL`·`ANTHROPIC_LOG` 무시(SDK baseURL 고정·logLevel off·.env 선택 로드) [x] check 통과
+- 결정 기록: 로드 시 심볼릭 링크·비정규 파일·group/other 비트 → `unreadable`(detail 코드: symlink / not_regular_file / insecure_permissions, 수정 방법 안내) — 느슨한 권한을 조용히 고치지 않고 거절 / 저장은 임시 파일(`wx`, 600) → rename, 실패 시 임시 파일 제거 / `.env`는 `util.parseEnv`로 허용 키 3개만 / `.gitignore`에 `.msg-agent/`
 
 ### R4 — 외부 경계 검증·기한 · 상태: TODO · [06, 14, SEC-08, SEC-09, SEC-12]
 - 목표: OpenAI 응답 zod 검증(→ `bad_response`), Claude 응답 형태 검사, OpenAI fetch·Telegram 다운로드에 AbortSignal 기한 + 스트리밍 누적 바이트 상한(getFile file_size 검증 포함), Claude SDK timeout.

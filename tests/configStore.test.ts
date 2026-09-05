@@ -1,4 +1,13 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -53,10 +62,9 @@ describe("configStore", () => {
     });
   });
 
-  it("tightens permissions of a pre-existing loose file", () => {
-    writeFileSync(path.replace("/.msg-agent/config.json", "/loose.json"), "{}", { mode: 0o644 });
+  it("replaces a pre-existing loose file with a 600 file on save", () => {
     const loose = join(dir, "loose.json");
-    expect(statSync(loose).mode & 0o777).toBe(0o644);
+    writeFileSync(loose, "{}", { mode: 0o644 });
     expect(saveConfig(input, loose).ok).toBe(true);
     expect(statSync(loose).mode & 0o777).toBe(0o600);
   });
@@ -74,6 +82,60 @@ describe("configStore", () => {
     expect(r.error.kind).toBe("not_found");
     const [e] = explainConfigError(r.error, "ko");
     expect(e?.fix).toContain("init");
+  });
+
+  it("never quotes the file in a JSON syntax error (review 03 / SEC-06)", () => {
+    saveConfig(input, path);
+    writeFileSync(path, '{ "provider": { "apiKeyRef": "literal:FAKE_SECRET_FOR_REVIEW" ', {
+      mode: 0o600,
+    });
+    const r = loadConfig(path);
+    expect(!r.ok && r.error.kind).toBe("invalid_json");
+    if (r.ok) return;
+    const text =
+      JSON.stringify(r.error) +
+      JSON.stringify(explainConfigError(r.error, "ko")) +
+      JSON.stringify(explainConfigError(r.error, "en"));
+    expect(text).not.toContain("FAKE_SECRET");
+    expect(text).not.toContain("literal:FA");
+  });
+
+  it("rejects symlinked config files and files readable by others, with a fix (SEC-07)", () => {
+    saveConfig(input, path);
+    const link = join(dir, "link.json");
+    symlinkSync(path, link);
+    const viaLink = loadConfig(link);
+    expect(!viaLink.ok && viaLink.error.kind === "unreadable" && viaLink.error.detail).toBe(
+      "symlink",
+    );
+
+    chmodSync(path, 0o644);
+    const loose = loadConfig(path);
+    expect(!loose.ok && loose.error.kind === "unreadable" && loose.error.detail).toBe(
+      "insecure_permissions",
+    );
+    if (loose.ok || loose.error.kind !== "unreadable") return;
+    expect(explainConfigError(loose.error, "ko")[0]?.fix).toContain("chmod 600");
+    chmodSync(path, 0o600);
+    expect(loadConfig(path).ok).toBe(true);
+  });
+
+  it("writes atomically: a failed save leaves the previous file intact and no temp files (review 12)", () => {
+    saveConfig(input, path);
+    const before = readFileSync(path, "utf8");
+    const cfgDir = join(dir, ".msg-agent");
+    chmodSync(cfgDir, 0o500); // no write permission -> temp file creation fails
+    try {
+      const r = saveConfig({ ...input, nativeLang: "ja" }, path);
+      expect(r.ok).toBe(false);
+    } finally {
+      chmodSync(cfgDir, 0o700);
+    }
+    expect(readFileSync(path, "utf8")).toBe(before);
+    expect(readdirSync(cfgDir)).toEqual(["config.json"]);
+    // a successful save replaces the file and keeps mode 600
+    expect(saveConfig({ ...input, nativeLang: "ja" }, path).ok).toBe(true);
+    expect(configFileMode(path)).toBe(0o600);
   });
 
   it("reports invalid JSON", () => {
@@ -146,15 +208,32 @@ describe("loadDotEnv", () => {
     expect(loadDotEnv(dir)).toBe(false);
   });
 
-  it("loads variables without overriding existing ones", () => {
+  it("loads only the allow-listed keys, never overriding existing values (SEC-05)", () => {
     process.env.MESSAGE_TEST_FIXED = "keep";
-    writeFileSync(join(dir, ".env"), "MESSAGE_TEST_NEW=from-file\nMESSAGE_TEST_FIXED=override\n");
+    delete process.env.ANTHROPIC_BASE_URL;
+    delete process.env.ANTHROPIC_LOG;
+    writeFileSync(
+      join(dir, ".env"),
+      [
+        "TELEGRAM_BOT_TOKEN=from-file",
+        "MESSAGE_TEST_FIXED=override",
+        "ANTHROPIC_BASE_URL=https://review-sink.invalid",
+        "ANTHROPIC_LOG=debug",
+        "MESSAGE_TEST_NEW=nope",
+      ].join("\n"),
+    );
+    const hadToken = process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.TELEGRAM_BOT_TOKEN;
     try {
       expect(loadDotEnv(dir)).toBe(true);
-      expect(process.env.MESSAGE_TEST_NEW).toBe("from-file");
+      expect(process.env.TELEGRAM_BOT_TOKEN).toBe("from-file");
       expect(process.env.MESSAGE_TEST_FIXED).toBe("keep");
+      expect(process.env.ANTHROPIC_BASE_URL).toBeUndefined();
+      expect(process.env.ANTHROPIC_LOG).toBeUndefined();
+      expect(process.env.MESSAGE_TEST_NEW).toBeUndefined();
     } finally {
-      delete process.env.MESSAGE_TEST_NEW;
+      delete process.env.TELEGRAM_BOT_TOKEN;
+      if (hadToken !== undefined) process.env.TELEGRAM_BOT_TOKEN = hadToken;
       delete process.env.MESSAGE_TEST_FIXED;
     }
   });
