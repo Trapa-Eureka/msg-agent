@@ -25,7 +25,8 @@
     "cli": "tsx src/cli/index.ts",
     "smoke": "tsx scripts/smoke.ts",
     "fixtures": "tsx scripts/fixtures/generate.ts",
-    "prepublishOnly": "npm run check && npm run build"
+    "prepublishOnly": "npm run check && npm run build && npm run check:tarball",
+    "check:tarball": "sh scripts/check-tarball.sh"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

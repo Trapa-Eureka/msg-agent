@@ -126,7 +126,7 @@
 T0~T11 전부 DONE, SPEC §7 완료 판정 충족. **코드 작업은 남아 있지 않고 공개 절차만 남았다** — 전부 사람 몫(WORKFLOW §4).
 
 - [x] 패키지명 `msg-agent` 확정, `package.json` name/bin/license/repository, `private` 해제, lockfile 동기화
-- [x] `npm pack --dry-run`으로 배포물 확인(LICENSE·README·dist만 포함), `prepublishOnly = check + build`
+- [x] `npm pack --dry-run`으로 배포물 확인(LICENSE·README·dist만 포함; 사용자도 2026-09-06 재확인), `prepublishOnly = check + build + check:tarball`(비밀 파일·키 패턴 있으면 publish 차단)
 - [x] git 히스토리 시크릿 스캔 0건, `.env` 미추적
 - [x] 실 스모크 통과(2026-09-05), 임계치 3,000 유지
 - [x] 짧은 영어 PDF로 `inline_full` 경로 실 채팅 확인(2026-09-06, 2,102자 커버레터, 23.5초) · R1~R7 이후 스모크 재통과, 페어링 완료
