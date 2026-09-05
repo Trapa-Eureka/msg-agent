@@ -16,9 +16,10 @@
 - 완료 기준: [x] `npm run check` 통과 [x] 더미 테스트 1개 [x] git init + 첫 커밋
 - 결정 기록: 패키지명 임시 `message` + `private: true`(T11에서 해제) / CLI 호출 형식 `npm run cli -- <cmd>`로 통일 / ESM(`type: module`) + TypeScript 5.x 고정(typescript-eslint 호환) / Prettier는 `*.md` 제외(문서는 손대지 않음)
 
-### T1 — 타입·설정 스키마 · 상태: TODO · 의존: T0
+### T1 — 타입·설정 스키마 · 상태: DONE(2026-09-05) · 의존: T0
 - 목표: `core/types.ts`(DESIGN §2 전체), config zod 스키마 + `configStore`(로드/저장, 파일 권한 600, env 참조 해석).
-- 완료 기준: [ ] 설정 라운드트립·오류 케이스(필수 누락·잘못된 언어코드 → 수정 방법 안내) 테스트 [ ] check 통과
+- 완료 기준: [x] 설정 라운드트립·오류 케이스(필수 누락·잘못된 언어코드 → 수정 방법 안내) 테스트 [x] check 통과
+- 결정 기록: 오류는 throw 대신 `Result` + 코드(`ConfigIssue`)로 반환하고 문구는 `core/configMessages.ts`(ko/en)에만 둔다 → T8 문구 팩으로 이관 / 언어 코드 검증·정규화는 `iso-639-3` 테이블(639-1 우선) / `.env`는 의존성 없이 `process.loadEnvFile` / 시크릿은 `redactSecretRef`로만 표시
 
 ### T2 (레인 A) — 추출기 3종 · 상태: TODO · 의존: T1
 - 목표: pdf-parse·mammoth·UTF-8 추출기 + 섹션 구조화, `fixtures/docs/` 제작(TESTING §2 목록 전부).
