@@ -78,7 +78,7 @@ async function verifyTelegram(token: string): Promise<VerifyResult> {
 
 const program = new Command();
 program
-  .name("message")
+  .name("msg-agent")
   .version(CORE_VERSION)
   .option("-c, --config <path>", "config file path", defaultConfigPath());
 

@@ -32,7 +32,7 @@ interface Text {
 }
 
 const ko: Text = {
-  welcome: "message 온보딩 — 3가지만 물어봅니다.",
+  welcome: "msg-agent 온보딩 — 3가지만 물어봅니다.",
   askLang: "모국어를 입력하세요 (언어 이름 또는 ISO 639 코드, 예: 한국어 / ko)",
   askProvider: "번역에 사용할 AI 프로바이더",
   askKey: (k) => `${k} API 키를 붙여넣으세요 (화면에 표시되지 않습니다)`,
@@ -49,14 +49,14 @@ const ko: Text = {
     "봇을 원하는 대화방(1:1 또는 그룹)에 초대하세요. 그룹이면 @BotFather에서 /setprivacy → Disable로 프라이버시 모드를 꺼야 파일을 받을 수 있습니다. 시작: npm run cli -- start",
   starting: (u, l) => `봇 ${u === undefined ? "" : `@${u} `}시작 (모국어 ${l}). 종료: Ctrl+C`,
   stopping: "종료 중… 진행 중인 작업을 정리합니다.",
-  statusTitle: "message 상태",
+  statusTitle: "msg-agent 상태",
   botOk: (u) => `봇 연결: 정상 (@${u})`,
   botFail: "봇 연결: 실패",
   noConfig: "설정이 없습니다. 먼저 온보딩을 실행하세요: npm run cli -- init",
 };
 
 const en: Text = {
-  welcome: "message onboarding — just three questions.",
+  welcome: "msg-agent onboarding — just three questions.",
   askLang: "Your native language (name or ISO 639 code, e.g. Korean / ko)",
   askProvider: "AI provider for translation",
   askKey: (k) => `Paste your ${k} API key (input is hidden)`,
@@ -74,7 +74,7 @@ const en: Text = {
   starting: (u, l) =>
     `Bot ${u === undefined ? "" : `@${u} `}starting (native language ${l}). Stop with Ctrl+C`,
   stopping: "Stopping… finishing in-flight work.",
-  statusTitle: "message status",
+  statusTitle: "msg-agent status",
   botOk: (u) => `Bot connection: ok (@${u})`,
   botFail: "Bot connection: failed",
   noConfig: "No config found. Run onboarding first: npm run cli -- init",

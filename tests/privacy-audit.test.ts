@@ -106,7 +106,7 @@ afterEach(() => {
 });
 
 async function runScenario(translator: FakeTranslator): Promise<void> {
-  const configPath = join(dir, ".message", "config.json");
+  const configPath = join(dir, ".msg-agent", "config.json");
   saveConfig(
     {
       nativeLang: "ko",
@@ -158,8 +158,8 @@ describe("runtime signature audit through the assembled daemon", () => {
       expect(Object.keys(entry)).toEqual(expect.arrayContaining(["ts", "level", "event"]));
     }
     expect(readdirSync(process.cwd())).toEqual(cwdBefore);
-    expect(readdirSync(join(dir, ".message"))).toEqual(["config.json"]);
-    expectNoSignatures("config.json", readFileSync(join(dir, ".message", "config.json"), "utf8"));
+    expect(readdirSync(join(dir, ".msg-agent"))).toEqual(["config.json"]);
+    expectNoSignatures("config.json", readFileSync(join(dir, ".msg-agent", "config.json"), "utf8"));
   });
 
   it("failure path: provider errors and retries never put content in logs", async () => {
@@ -172,6 +172,6 @@ describe("runtime signature audit through the assembled daemon", () => {
     expectNoSignatures("stderr(logger) on failure", err);
     expectNoSignatures("cli output on failure", cliLines.join("\n"));
     expect(messenger.filesFor("c")).toEqual([]);
-    expect(readdirSync(join(dir, ".message"))).toEqual(["config.json"]);
+    expect(readdirSync(join(dir, ".msg-agent"))).toEqual(["config.json"]);
   });
 });

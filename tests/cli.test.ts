@@ -19,7 +19,7 @@ let dir: string;
 let configPath: string;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "message-cli-"));
-  configPath = join(dir, ".message", "config.json");
+  configPath = join(dir, ".msg-agent", "config.json");
 });
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });

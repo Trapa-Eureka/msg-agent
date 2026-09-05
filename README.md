@@ -1,4 +1,4 @@
-# message
+# msg-agent
 
 메신저 대화창에 올라온 **외국어 문서를 내 모국어로 자동 번역해주는 개인용 AI Agent**.
 
@@ -34,7 +34,7 @@ npm run cli -- init    # 온보딩 3문항: 모국어 / 프로바이더+API 키 
 npm run cli -- start   # long polling 데몬 — 이후 봇에게 문서를 보내면 같은 대화창에 번역이 올라온다
 ```
 
-`npm run cli -- status`는 설정 요약(키·토큰은 가려서)과 봇 연결 상태를 보여준다. 키·토큰은 `.env`(`ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/`TELEGRAM_BOT_TOKEN`) 또는 `~/.message/config.json`(권한 600)에만 저장된다.
+`npm run cli -- status`는 설정 요약(키·토큰은 가려서)과 봇 연결 상태를 보여준다. 키·토큰은 `.env`(`ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/`TELEGRAM_BOT_TOKEN`) 또는 `~/.msg-agent/config.json`(권한 600)에만 저장된다.
 
 ### 채팅 명령
 
@@ -57,4 +57,4 @@ npm run smoke -- [--chat <chatId>] [--wait 300]   # 실 봇·실 키로 수동 �
 
 - 2026-09-04: 문서 단계 (코드 미작성). T0부터 시작.
 - 2026-09-05: T0~T11 구현 완료 (177+ 테스트, core 커버리지 97%, 프라이버시 감사 포함). 남은 것: 사람이 실 토큰·키로 `npm run smoke` 실행 → 임계치 튜닝 → 패키지명 확정 → npm 공개 (`docs/HUMAN_PREP.md`).
-- npm 패키지명은 미결 — 후보 3개는 SPEC §8 참조. `package.json`은 임시 이름 `message` + `"private": true`이며 사람이 이름을 확정하면 해제한다.
+- npm 패키지명 `msg-agent` 확정(2026-09-05). 공개 후 설치: `npm i -g msg-agent` → `msg-agent init` / `msg-agent start` / `msg-agent status` (개발 중에는 `npm run cli -- <cmd>`).

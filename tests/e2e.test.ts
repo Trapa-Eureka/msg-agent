@@ -33,7 +33,7 @@ let lines: string[];
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), "message-e2e-"));
-  configPath = join(dir, ".message", "config.json");
+  configPath = join(dir, ".msg-agent", "config.json");
   saveConfig(
     {
       nativeLang: "ko",
@@ -197,8 +197,8 @@ describe("SPEC §7 scenarios through the assembled daemon", () => {
         expect(typeof v === "string" ? v.length : 0).toBeLessThan(120);
     }
     // Only the config file exists in the daemon's directory — no temp files, no translations on disk
-    expect(readdirSync(dir)).toEqual([".message"]);
-    expect(readdirSync(join(dir, ".message"))).toEqual(["config.json"]);
+    expect(readdirSync(dir)).toEqual([".msg-agent"]);
+    expect(readdirSync(join(dir, ".msg-agent"))).toEqual(["config.json"]);
     expect(readFileSync(configPath, "utf8")).not.toContain("USD");
   });
 

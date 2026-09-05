@@ -25,7 +25,7 @@
 2. **AI 프로바이더** — Claude(기본)/OpenAI 선택 + API 키 입력 → 즉시 1회 검증 호출로 키 확인.
 3. **메신저** — v0.1은 Telegram 고정: BotFather 토큰 붙여넣기 → 검증 → "봇을 원하는 대화방에 초대하세요" 안내.
 
-설정은 `~/.message/config.json`(권한 600)에 저장. `start`로 데몬 시작.
+설정은 `~/.msg-agent/config.json`(권한 600)에 저장. `start`로 데몬 시작.
 
 ## 4. 출력 모드 결정: 전문 vs 요약 (질문에 대한 결론)
 
@@ -59,11 +59,11 @@
 
 ## 8. 미결 사항
 
-- [ ] npm 패키지명·bin 이름 — `message`는 npm에 선점됨(0.0.1). 2026-09-05 조회 기준 사용 가능 후보(T11):
+- [x] npm 패키지명·bin 이름 — **`msg-agent`로 확정(2026-09-05, Jin)**. `package.json` name/bin, 설정 경로 `~/.msg-agent/`, README 반영, `private` 해제 완료. 조회 당시 후보(참고):
   1. `msg-agent` — 저장소 이름과 동일, bin `msg-agent`
   2. `docslate` — 짧고 브랜드화 가능(document + translate), bin `docslate`
   3. `chatdoc-translate` — 기능 설명형, bin `chatdoc-translate`
-  - 대안: 스코프 패키지 `@shiz_son/msg-agent`(npm 계정 스코프, 충돌 없음). 확정 시 `package.json`의 `name`·`bin`, `~/.message/` 설정 경로, README 표기를 함께 바꾸고 `private: true`를 해제한다(사람 승인).
+  - 대안이었던 스코프 패키지 `@shiz_son/msg-agent`는 불필요. 반영 완료: `package.json` name·bin `msg-agent`, 설정 경로 `~/.msg-agent/`, README. `npm publish`는 실 스모크 후 사람이 실행.
 - [ ] 짧은/긴 임계치 기본값(3,000자) — 스모크 후 튜닝
 - [ ] 요약 프롬프트에 문서 유형별 템플릿(계약서/매뉴얼/공지) 둘지 v0.2 검토
 - [ ] Viber 어댑터 시 웹훅 호스팅 권장안(Cloudflare Tunnel vs 배포)
