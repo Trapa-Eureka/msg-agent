@@ -7,3 +7,6 @@ export * from "./lang.js";
 export * from "./config.js";
 export * from "./configMessages.js";
 export * from "./sections.js";
+export * from "./detector.js";
+export * from "./chunker.js";
+export * from "./outputPlanner.js";

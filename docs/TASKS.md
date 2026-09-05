@@ -26,9 +26,10 @@
 - 완료 기준: [x] 형식별 정상 추출 테스트 [x] 빈 텍스트·암호 PDF가 명확한 실패 타입 반환 [x] check 통과
 - 결정 기록: `extract`는 `Result<ExtractedDoc, ExtractError>`(empty_text | encrypted | corrupt) 반환 / 섹션 구조화는 `core/sections.ts` 공용(빈 줄·Markdown 제목·짧은 무종결 행) + PDF 전용 행 복원(`pdfPagesToText`: 페이지 최장 행 대비 짧은 행 = 제목·문단 끝, CJK 줄바꿈은 공백 없이 결합) / DOCX 제목은 `#` Markdown으로 변환해 같은 휴리스틱 사용 / 픽스처는 `scripts/fixtures/generate.ts`(pdfkit·docx, macOS 폰트)로 생성해 커밋
 
-### T3 (레인 B) — 감지·분할·플래너 · 상태: TODO · 의존: T1
+### T3 (레인 B) — 감지·분할·플래너 · 상태: DONE(2026-09-05) · 의존: T1
 - 목표: franc 기반 detector(+신뢰도), 섹션 경계 chunker, outputPlanner(smart 정책).
-- 완료 기준: [ ] **TESTING §3 골든 플랜 7종 전부** [ ] RTL·CJK 분할 무결성 [ ] check 통과
+- 완료 기준: [x] **TESTING §3 골든 플랜 7종 전부** [x] RTL·CJK 분할 무결성 [x] check 통과
+- 결정 기록: 신뢰도는 franc 점수 차(긴 글에서 0으로 수렴)가 아니라 표본 길이 × 전·후반 일치도로 계산, 기준 0.7 / `sco`(Scots)는 영어 그림자라 무시 / 청크 4,000자 기본, Intl.Segmenter 자소 단위로 하드 분할 / 플래너는 `PlanDecision`만 반환하고 실제 `OutputPlan` 조립은 T6
 
 ### T4 (레인 C) — 번역 프로바이더 · 상태: TODO · 의존: T1
 - 목표: TranslatorProvider 인터페이스 + Claude·OpenAI 어댑터(주입 fetch), FakeTranslator(마커·실패 주입·호출 계수), 번역·요약 프롬프트 템플릿.
