@@ -61,9 +61,10 @@
 - 완료 기준: [x] 시나리오 전부 통과 [x] check 통과
 - 결정 기록: `tests/e2e.test.ts`는 `runStart`로 실제 조립(실 추출기·franc·ko/en 문구 팩·파일 설정 저장소)하고 메신저·번역기만 가짜 / 시나리오 9종: 짧은 PDF 인라인, 긴 PDF 요약+파일, 한국어 스킵, 스캔·암호·미지원·상한 초과 안내, 명령 4종(설정 파일 영속·언어 전환 후 EN 문구), 동시 2채팅, 로그·출력·디스크 무잔류, 세션 비용 가드 / 발견·수정: pdf.js가 입력 버퍼를 detach해 같은 바이트 재추출이 실패하던 문제 → PdfExtractor가 복사본 전달
 
-### T10 — 커버리지 + 프라이버시 감사 테스트 · 상태: TODO · 의존: T9
+### T10 — 커버리지 + 프라이버시 감사 테스트 · 상태: DONE(2026-09-05) · 의존: T9
 - 목표: core ≥ 90% 리포트, 로그·임시파일 본문 잔류 부재 자동 검사(시그니처 문자열 기법) 상시 테스트화.
-- 완료 기준: [ ] 리포트 첨부 [ ] 감사 테스트가 check에 포함 [ ] check 통과
+- 완료 기준: [x] 리포트 첨부(`docs/COVERAGE.md`: core 96.9% / lines 97.2%) [x] 감사 테스트가 check에 포함(`tests/privacy-audit.test.ts`) [x] check 통과
+- 결정 기록: `npm run check`의 test 단계를 `vitest run --coverage`로 바꾸고 vitest 임계치(statements/lines/functions 90, branches 80)로 강제 — 임계치 99로 돌려 실패함을 확인 / 감사는 정적(디스크 쓰기 API는 configStore만, console은 cli만, 로거 메타에 본문 키 금지) + 런타임(시그니처 3개, 실 ConsoleLogger·stdout/stderr 스파이, 성공·실패 경로, cwd·설정 디렉터리 무잔류) 두 층 / 감사 테스트는 삭제·완화 금지(WORKFLOW §2)
 
 ### T11 — 스모크 + 공개 준비 · 상태: TODO · 의존: T10
 - 목표: `scripts/smoke.ts`(TESTING §5, 그룹 프라이버시 모드 확인 포함), README 퀵스타트 실명령 갱신, npm 패키지명 후보 3개 조사·기록(퍼블리시는 사람 승인).
