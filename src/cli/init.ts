@@ -50,13 +50,22 @@ const PROVIDER_LABEL: Record<ProviderKind, string> = {
   openai: "OpenAI",
 };
 
+/** Onboarding offers these ten languages (SPEC §3). Any other ISO 639 code can be set later with /lang. */
+export const ONBOARDING_LANGUAGES: readonly { code: string; ko: string; en: string }[] = [
+  { code: "ko", ko: "한국어", en: "Korean" },
+  { code: "en", ko: "영어", en: "English" },
+  { code: "es", ko: "스페인어", en: "Spanish" },
+  { code: "fr", ko: "프랑스어", en: "French" },
+  { code: "de", ko: "독일어", en: "German" },
+  { code: "ja", ko: "일본어", en: "Japanese" },
+  { code: "zh", ko: "중국어", en: "Chinese" },
+  { code: "it", ko: "이탈리아어", en: "Italian" },
+  { code: "ru", ko: "러시아어", en: "Russian" },
+  { code: "la", ko: "라틴어", en: "Latin" },
+];
+
 export const languageChoices = (): { title: string; value: string }[] =>
-  iso6393
-    .filter((l) => l.type === "living" && (l.iso6391 !== undefined || l.scope === "individual"))
-    .map((l) => ({
-      title: `${l.name} (${l.iso6391 ?? l.iso6393})`,
-      value: l.iso6391 ?? l.iso6393,
-    }));
+  ONBOARDING_LANGUAGES.map((l) => ({ title: `${l.ko} · ${l.en} (${l.code})`, value: l.code }));
 
 /** Resolves a name ("Korean") or code ("ko"/"kor") to a canonical code. */
 export function resolveLanguageInput(input: string): string | undefined {
@@ -140,15 +149,13 @@ export async function runInit(d: InitDeps): Promise<number> {
   let t = text(ui);
   d.out(t.welcome);
 
-  // 1. Native language
+  // 1. Native language — fixed list; the answer must be one of the ten codes
   const nativeLang = await withAttempts<string>(
     async () => {
-      const a = await d.ask({
-        type: "autocomplete",
-        message: t.askLang,
-        choices: languageChoices(),
-      });
-      return typeof a === "string" ? resolveLanguageInput(a) : undefined;
+      const a = await d.ask({ type: "select", message: t.askLang, choices: languageChoices() });
+      return typeof a === "string" && ONBOARDING_LANGUAGES.some((l) => l.code === a)
+        ? a
+        : undefined;
     },
     d.maxAttempts ?? 3,
     t.retry,

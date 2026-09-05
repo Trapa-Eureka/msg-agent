@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ClaudeProvider, OpenAIProvider, createProvider } from "../src/adapters/providers/index.js";
+import { supportsFallbacks } from "../src/adapters/providers/claude.js";
 import { ProviderError } from "../src/core/index.js";
 
 interface Captured {
@@ -77,21 +78,38 @@ describe("ClaudeProvider (SDK + injected fetch)", () => {
     expect(m.calls).toHaveLength(2);
     const c = m.calls[0];
     if (c === undefined) throw new Error("no request captured");
-    expect(c.url).toBe("https://api.anthropic.com/v1/messages?beta=true");
+    expect(c.url).toBe("https://api.anthropic.com/v1/messages");
     expect(c.method).toBe("POST");
     expect(c.headers["x-api-key"]).toBe("sk-test");
-    expect(c.headers["anthropic-beta"]).toContain("server-side-fallback-2026-07-01");
+    expect(c.headers["anthropic-beta"]).toBeUndefined();
     expect(c.body).toMatchObject({
       model: "claude-sonnet-5",
       max_tokens: 16000,
-      fallbacks: "default",
       output_config: { effort: "low" },
       messages: [{ role: "user", content: "Hello" }],
     });
+    expect(c.body).not.toHaveProperty("fallbacks"); // Sonnet 5 rejects the parameter with 400
     const body = c.body as { system: string };
     expect(body.system).toContain("Korean (ko)");
     expect(body.system).toContain("English (en)");
     expect(body).not.toHaveProperty("thinking");
+  });
+
+  it("enables server-side fallbacks only on Opus 5 / Fable 5 models", async () => {
+    const m = mockFetch([{ status: 200, body: claudeMessage("x") }]);
+    const p = new ClaudeProvider({
+      apiKey: "k",
+      model: "claude-opus-5",
+      fetch: m.fetch,
+      maxRetries: 0,
+    });
+    await p.summarize({ text: "body", sections: [] }, "ko");
+    expect(m.calls[0]?.url).toBe("https://api.anthropic.com/v1/messages?beta=true");
+    expect(m.calls[0]?.headers["anthropic-beta"]).toContain("server-side-fallback-2026-07-01");
+    expect(m.calls[0]?.body).toMatchObject({ fallbacks: "default" });
+    expect(supportsFallbacks("claude-fable-5-1")).toBe(true);
+    expect(supportsFallbacks("claude-sonnet-5")).toBe(false);
+    expect(supportsFallbacks("claude-haiku-4-5")).toBe(false);
   });
 
   it("uses the configured model and medium effort for summaries", async () => {

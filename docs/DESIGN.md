@@ -98,7 +98,7 @@ export type OutputPlan =
 ## 5. 프로바이더 메모
 
 - ClaudeProvider(기본)·OpenAIProvider — 공통: 청크별 번역 프롬프트(용어·수치·고유명사 보존 지시, 출력은 번역문만), 요약 프롬프트(제목·핵심 조항·수치·요청사항 구조). 프롬프트 텍스트는 `core/prompts.ts` 한 곳에만 둔다. 청크는 순차 호출(진행 n/m 콜백), 청크 재시도는 파이프라인(T6) 책임이며 프로바이더는 `ProviderError`(retryable 플래그)를 던진다.
-- Claude: 공식 SDK(`@anthropic-ai/sdk`)에 `fetch`를 주입해 테스트에서는 목 fetch로 요청 형태를 검증한다. 기본 모델 `claude-sonnet-5`(config `provider.model`로 변경), 번역은 `output_config.effort: "low"`, 요약은 `"medium"`, 안전 거절 시 서버측 fallbacks(`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`) 적용, `stop_reason: "refusal"`이면 `refusal` 오류. 키 검증은 `GET /v1/models/{model}`.
+- Claude: 공식 SDK(`@anthropic-ai/sdk`)에 `fetch`를 주입해 테스트에서는 목 fetch로 요청 형태를 검증한다. 기본 모델 `claude-sonnet-5`(config `provider.model`로 변경), 번역은 `output_config.effort: "low"`, 요약은 `"medium"`. 서버측 fallbacks(`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`)는 **Opus 5·Fable 5 계열에서만** 붙인다 — Sonnet 5는 `fallbacks` 파라미터를 400으로 거부함(2026-09-05 실 스모크에서 발견). `stop_reason: "refusal"`이면 `refusal` 오류. 키 검증(`verify`)은 models 조회라 요청 형태 오류를 잡지 못하므로 `npm run smoke`가 1청크 실번역 프로브를 추가로 수행한다. 키 검증은 `GET /v1/models/{model}`.
 - OpenAI: Chat Completions(`/v1/chat/completions`) raw fetch, 기본 모델 `gpt-5`(config로 변경), 키 검증은 `GET /v1/models/{model}`. 401→auth, 429→rate_limit(재시도 가능), 5xx→server(재시도 가능).
 - 온보딩 `init`에서 키 검증 1회 호출. 실패 시 수정 방법 담긴 안내.
 - 토큰 상한(config `maxChars`) 초과 문서는 planner가 요약 모드 강제 제안 → 사용자가 `/full`로 명시 요청해도 상한 초과면 거절 사유 안내 (가드레일 5).
@@ -117,7 +117,7 @@ export type OutputPlan =
 zod 스키마로 로드 검증. CLI `status`는 설정 요약 + 봇 연결 상태 출력.
 
 **CLI 조립(src/cli)** — 조립만, 로직 없음. 세 명령은 모두 의존성 주입 함수(`runInit`/`runStart`/`runStatus`)로 구현하고 `cli/index.ts`가 실제 구현(prompts, 실 fetch, grammY getMe)을 꽂는다. 테스트는 스크립트된 응답기·가짜 검증기·FakeMessenger를 꽂아 네트워크 0건.
-- `init`: ① 모국어(자동완성, 이름 또는 코드 → 정규화) ② 프로바이더 선택 + 키 — 환경변수(`.env` 포함)에 이미 있으면 `env:VAR` 참조를 제안, 없으면 입력받아 `literal:`로 저장 → `verify()` 즉시 호출 ③ Telegram 토큰(동일 규칙) → getMe 검증. 검증 실패 시 원인 + 수정 방법을 보여주고 최대 3회 재입력, 초과 시 종료 코드 1. 비밀값은 화면·로그에 절대 출력하지 않는다.
+- `init`: ① 모국어(10개 고정 select — `cli/init.ts`의 `ONBOARDING_LANGUAGES`, SPEC §3) ② 프로바이더 선택 + 키 — 환경변수(`.env` 포함)에 이미 있으면 `env:VAR` 참조를 제안, 없으면 입력받아 `literal:`로 저장 → `verify()` 즉시 호출 ③ Telegram 토큰(동일 규칙) → getMe 검증. 검증 실패 시 원인 + 수정 방법을 보여주고 최대 3회 재입력, 초과 시 종료 코드 1. 비밀값은 화면·로그에 절대 출력하지 않는다.
 - `start`: `.env` 로드 → config 로드·시크릿 해석(실패 시 원인+수정 방법, 종료 코드 1) → 프로바이더·추출기·감지기·Telegram 어댑터·`FileSettings`(configStore 래퍼) 조립 → `Pipeline.attach()` → `messenger.start()`. SIGINT/SIGTERM에 `messenger.stop()` 후 종료. 로그는 stderr JSON lines, 메타데이터만.
 - `status`: config 요약(시크릿은 `redactSecretRef`), 파일 권한, 봇 getMe 결과.
 - CLI 화면 문구는 `cli/text.ts`(ko/en, 모국어가 ko면 ko 아니면 en). 메신저 문구 팩(T8)과 별개.
