@@ -33,7 +33,7 @@ interface Text {
 
 const ko: Text = {
   welcome: "msg-agent 온보딩 — 3가지만 물어봅니다.",
-  askLang: "모국어를 입력하세요 (언어 이름 또는 ISO 639 코드, 예: 한국어 / ko)",
+  askLang: "모국어를 선택하세요 (↑↓ 이동, Enter 선택)",
   askProvider: "번역에 사용할 AI 프로바이더",
   askKey: (k) => `${k} API 키를 붙여넣으세요 (화면에 표시되지 않습니다)`,
   useEnv: (v) =>
@@ -57,7 +57,7 @@ const ko: Text = {
 
 const en: Text = {
   welcome: "msg-agent onboarding — just three questions.",
-  askLang: "Your native language (name or ISO 639 code, e.g. Korean / ko)",
+  askLang: "Select your native language (↑↓ to move, Enter to choose)",
   askProvider: "AI provider for translation",
   askKey: (k) => `Paste your ${k} API key (input is hidden)`,
   useEnv: (v) =>

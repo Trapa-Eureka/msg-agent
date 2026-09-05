@@ -4,7 +4,12 @@
 // one document upload, ticking the checklist from pipeline log events (metadata only, never content).
 import { Bot } from "grammy";
 import type { LogMeta, Logger } from "../src/core/index.js";
-import { explainConfigError, explainSecretError, formatExplanations } from "../src/core/index.js";
+import {
+  ProviderError,
+  explainConfigError,
+  explainSecretError,
+  formatExplanations,
+} from "../src/core/index.js";
 import {
   defaultConfigPath,
   loadConfig,
@@ -38,6 +43,7 @@ type ItemKey =
   | "getMe"
   | "privacyOff"
   | "providerKey"
+  | "providerProbe"
   | "daemon"
   | "docReceived"
   | "extracted"
@@ -52,6 +58,11 @@ const ITEMS: { key: ItemKey; label: string; required: boolean }[] = [
     required: false,
   },
   { key: "providerKey", label: "프로바이더 키 검증", required: true },
+  {
+    key: "providerProbe",
+    label: "프로바이더 실번역 프로브 (1청크, 요청 형태 확인)",
+    required: true,
+  },
   { key: "daemon", label: "데몬 시작 + 명령 자동완성 등록", required: true },
   { key: "docReceived", label: "문서 수신", required: true },
   { key: "extracted", label: "텍스트 추출·언어 감지·플랜 결정", required: true },
@@ -188,6 +199,23 @@ async function main(): Promise<number> {
       : `${verify.error.kind}${verify.error.detail === undefined ? "" : ` (${verify.error.detail})`}`,
   );
   if (!verify.ok) {
+    list.print();
+    return 1;
+  }
+  // 2b. One tiny real translation — catches request-shape errors a models lookup cannot (e.g. unsupported params)
+  try {
+    const probe = await createProvider(config.provider, apiKey.value).translate(
+      [{ index: 0, sectionIndex: 0, text: "Good morning. This is a connectivity check." }],
+      config.nativeLang,
+      { sourceLangHint: "en" },
+    );
+    list.set("providerProbe", true, `${String(probe[0]?.text.length ?? 0)} chars`);
+  } catch (e) {
+    const pe =
+      e instanceof ProviderError
+        ? `${e.kind}${e.status === undefined ? "" : ` http ${String(e.status)}`}${e.detail === undefined ? "" : ` ${e.detail}`}`
+        : "error";
+    list.set("providerProbe", false, pe);
     list.print();
     return 1;
   }

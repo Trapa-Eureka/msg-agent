@@ -69,14 +69,9 @@ function initDeps(
 
 describe("init", () => {
   it("asks three questions, verifies, saves literal refs with mode 600, and never echoes secrets", async () => {
-    const { deps, asked, lines } = initDeps([
-      "English",
-      "claude",
-      "sk-ant-SECRET",
-      "123:TOKEN-SECRET",
-    ]);
+    const { deps, asked, lines } = initDeps(["en", "claude", "sk-ant-SECRET", "123:TOKEN-SECRET"]);
     expect(await runInit(deps)).toBe(0);
-    expect(asked.map((q) => q.type)).toEqual(["autocomplete", "select", "password", "password"]);
+    expect(asked.map((q) => q.type)).toEqual(["select", "select", "password", "password"]);
     const saved = JSON.parse(readFileSync(configPath, "utf8")) as Config;
     expect(saved).toMatchObject({
       nativeLang: "en",
@@ -139,19 +134,28 @@ describe("init", () => {
   });
 
   it("re-asks an unknown language and aborts on cancel", async () => {
-    const { deps, asked } = initDeps(["Nonexistentese", "xx-yy", undefined]);
+    const { deps, asked } = initDeps(["Nonexistentese", "tlh", undefined]);
     expect(await runInit(deps)).toBe(1);
-    expect(asked.filter((q) => q.type === "autocomplete")).toHaveLength(3);
+    expect(asked.filter((q) => q.type === "select")).toHaveLength(3);
   });
 
-  it("resolves languages by code or English name and offers choices", () => {
-    expect(resolveLanguageInput("KOR")).toBe("ko");
-    expect(resolveLanguageInput("japanese")).toBe("ja");
-    expect(resolveLanguageInput("Filipino")).toBe("fil");
-    expect(resolveLanguageInput("nope")).toBeUndefined();
+  it("offers exactly the ten onboarding languages with bilingual titles", () => {
     const choices = languageChoices();
-    expect(choices.length).toBeGreaterThan(100);
-    expect(choices).toContainEqual({ title: "Korean (ko)", value: "ko" });
+    expect(choices.map((c) => c.value)).toEqual([
+      "ko",
+      "en",
+      "es",
+      "fr",
+      "de",
+      "ja",
+      "zh",
+      "it",
+      "ru",
+      "la",
+    ]);
+    expect(choices[0]).toEqual({ title: "한국어 · Korean (ko)", value: "ko" });
+    expect(resolveLanguageInput("KOR")).toBe("ko");
+    expect(resolveLanguageInput("Latin")).toBe("la");
   });
 });
 

@@ -13,6 +13,11 @@ import { ProviderError, err, ok, summaryPrompt, translationPrompt } from "../../
 export const CLAUDE_DEFAULT_MODEL = "claude-sonnet-5";
 const MAX_TOKENS = 16000;
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
+/** Server-side refusal fallbacks exist only on the Opus 5 / Fable 5 families; Sonnet 5 rejects the parameter. */
+const FALLBACK_MODELS = /^claude-(?:opus-5|fable-5)/u;
+export function supportsFallbacks(model: string): boolean {
+  return FALLBACK_MODELS.test(model);
+}
 
 export interface ClaudeProviderOptions {
   apiKey: string;
@@ -38,7 +43,7 @@ function toProviderError(e: unknown): ProviderError {
   if (e instanceof Anthropic.APIConnectionError)
     return new ProviderError("network", true, undefined, e.name);
   if (e instanceof Anthropic.APIError) {
-    return new ProviderError("unknown", false, numericStatus(e.status), e.name);
+    return new ProviderError("unknown", false, numericStatus(e.status), e.constructor.name);
   }
   return new ProviderError("unknown", false, undefined, e instanceof Error ? e.name : "unknown");
 }
@@ -57,24 +62,29 @@ export class ClaudeProvider implements TranslatorProvider {
   }
 
   private async complete(system: string, user: string, effort: "low" | "medium"): Promise<string> {
-    let response: Anthropic.Beta.BetaMessage;
+    let response: Anthropic.Beta.BetaMessage | Anthropic.Message;
+    const request = {
+      model: this.model,
+      max_tokens: MAX_TOKENS,
+      output_config: { effort },
+      system,
+      messages: [{ role: "user" as const, content: user }],
+    };
     try {
-      response = await this.client.beta.messages.create({
-        model: this.model,
-        max_tokens: MAX_TOKENS,
-        betas: [FALLBACK_BETA],
-        fallbacks: "default",
-        output_config: { effort },
-        system,
-        messages: [{ role: "user", content: user }],
-      });
+      response = supportsFallbacks(this.model)
+        ? await this.client.beta.messages.create({
+            ...request,
+            betas: [FALLBACK_BETA],
+            fallbacks: "default",
+          })
+        : await this.client.messages.create(request);
     } catch (e) {
       throw toProviderError(e);
     }
     if (response.stop_reason === "refusal")
       throw new ProviderError("refusal", false, undefined, "refusal");
     const text = response.content
-      .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+      .filter((b): b is Anthropic.Beta.BetaTextBlock | Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
       .join("")
       .trim();
