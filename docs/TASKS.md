@@ -11,9 +11,10 @@
 
 ---
 
-### T0 — 프로젝트 스캐폴딩 · 상태: TODO
+### T0 — 프로젝트 스캐폴딩 · 상태: DONE(2026-09-05)
 - 목표: TS strict + ESLint + Prettier + Vitest + 스크립트(`check/test/typecheck/lint/cli/smoke`), `.env.example`, `.gitignore`(.env, ~/.message는 홈이라 무관).
-- 완료 기준: [ ] `npm run check` 통과 [ ] 더미 테스트 1개 [ ] git init + 첫 커밋
+- 완료 기준: [x] `npm run check` 통과 [x] 더미 테스트 1개 [x] git init + 첫 커밋
+- 결정 기록: 패키지명 임시 `message` + `private: true`(T11에서 해제) / CLI 호출 형식 `npm run cli -- <cmd>`로 통일 / ESM(`type: module`) + TypeScript 5.x 고정(typescript-eslint 호환) / Prettier는 `*.md` 제외(문서는 손대지 않음)
 
 ### T1 — 타입·설정 스키마 · 상태: TODO · 의존: T0
 - 목표: `core/types.ts`(DESIGN §2 전체), config zod 스키마 + `configStore`(로드/저장, 파일 권한 600, env 참조 해석).
