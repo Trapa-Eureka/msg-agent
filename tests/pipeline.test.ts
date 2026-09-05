@@ -247,7 +247,7 @@ describe("policy and commands", () => {
     expect(files).toHaveLength(1);
     expect(files[0]).toMatchObject({
       name: "doc.ko.md",
-      caption: "[fileCaption ko doc.ko.md Korean]",
+      caption: "[fileCaption ko doc.ko.md ko]",
     });
     expect(new TextDecoder().decode(files[0]?.content).startsWith("«KO:")).toBe(true);
     expect(h.translator.calls.summarize).toBe(1);
@@ -267,7 +267,7 @@ describe("policy and commands", () => {
 
     const same = harness({ fixtures: { pdf: syntheticDoc(2000, 2, "ko") } });
     await upload(same, "c", "doc.pdf");
-    expect(same.messenger.textsFor("c").at(-1)).toBe("[skipSameLang ko Korean]");
+    expect(same.messenger.textsFor("c").at(-1)).toBe("[skipSameLang ko ko]");
     expect(same.translator.calls.chunks).toBe(0);
 
     const over = harness({ config: { maxChars: 10_000 } });
@@ -320,7 +320,7 @@ describe("policy and commands", () => {
       "[modeChanged ko full]",
       "[modeInvalid ko loud smart|full|summary]",
       "[modeInvalid ko - smart|full|summary]",
-      "[langChanged ja Japanese]",
+      "[langChanged ja ja]",
       "[langInvalid ja Klingon]",
     ]);
     expect(h.settings.saves).toHaveLength(2);

@@ -1,10 +1,21 @@
-// Phrase pack registry. T8: add ko, snapshot tests, and fallback rules.
+// Phrase pack registry with fallback: exact code -> English.
 import type { Phrases } from "../core/index.js";
+import { canonicalLangCode } from "../core/index.js";
 import { en } from "./en.js";
+import { ko } from "./ko.js";
 
-const packs: Readonly<Record<string, Phrases>> = { en };
+export const PHRASE_PACKS: Readonly<Record<string, Phrases>> = { en, ko };
+export const FALLBACK_PHRASE_LANG = "en";
 
-/** Returns the pack for `lang`, falling back to English. */
+/** Returns the pack for `lang` (any ISO 639 spelling, e.g. "kor"), falling back to English. */
 export function phrasesFor(lang: string): Phrases {
-  return packs[lang.toLowerCase()] ?? en;
+  const code = canonicalLangCode(lang)?.code ?? lang.trim().toLowerCase();
+  return PHRASE_PACKS[code] ?? en;
 }
+
+export function hasPhrasePack(lang: string): boolean {
+  const code = canonicalLangCode(lang)?.code ?? lang.trim().toLowerCase();
+  return code in PHRASE_PACKS;
+}
+
+export { en, ko };

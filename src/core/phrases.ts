@@ -6,7 +6,8 @@ export interface Phrases {
   progressExtracting(fileName: string): string;
   progressTranslating(done: number, total: number): string;
   progressSummarizing(): string;
-  skipSameLang(langName: string): string;
+  /** `langCode` is an ISO 639 code; the pack renders the name in its own language. */
+  skipSameLang(langCode: string): string;
   rejectUnsupported(fileName: string, supported: readonly string[]): string;
   rejectTooLarge(sizeBytes: number, maxBytes: number): string;
   rejectOverMax(chars: number, maxChars: number, suggestSummary: boolean): string;
@@ -15,12 +16,12 @@ export interface Phrases {
   extractCorrupt(fileName: string): string;
   translationFailed(done: number, total: number): string;
   summaryFailed(): string;
-  fileCaption(fileName: string, langName: string): string;
+  fileCaption(fileName: string, langCode: string): string;
   fileFullNote(fileName: string): string;
   noLastDocument(): string;
   modeChanged(mode: OutputMode): string;
   modeInvalid(arg: string | undefined, modes: readonly OutputMode[]): string;
-  langChanged(langName: string): string;
+  langChanged(langCode: string): string;
   langInvalid(arg: string | undefined): string;
   unknownError(): string;
 }

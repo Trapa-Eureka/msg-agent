@@ -51,9 +51,10 @@
 - 완료 기준: [x] prompts 주입식 단위 테스트(비대화형 모드) [x] 검증 실패 시 수정 방법 안내 [x] check 통과
 - 결정 기록: 세 명령은 `runInit/runStart/runStatus`(의존성 주입) + `cli/index.ts` 조립(commander·prompts·grammY getMe) / 키·토큰은 환경변수가 있으면 `env:` 참조 제안, 없으면 `literal:` 저장, 검증 실패 시 원인+수정 방법 후 최대 3회 재입력 / 화면 문구는 `cli/text.ts`(ko/en) / `FileSettings`(configStore 래퍼)·`ConsoleLogger`(stderr JSON lines) 어댑터 추가 / 문구 팩은 임시로 `src/phrases/en.ts`만 — **T8이 ko·폴백·스냅샷 추가**
 
-### T8 — 사용자 문구 팩 · 상태: TODO · 의존: T6
+### T8 — 사용자 문구 팩 · 상태: DONE(2026-09-05) · 의존: T6
 - 목표: 사용자 대면 메시지(진행·스킵·거절·오류)를 모국어로 렌더 — 최소 ko·en 문구 팩 + 언어 폴백(en).
-- 완료 기준: [ ] 문구 키 누락 시 빌드 실패(타입으로 강제) [ ] ko/en 스냅샷 테스트 [ ] check 통과
+- 완료 기준: [x] 문구 키 누락 시 빌드 실패(타입으로 강제) [x] ko/en 스냅샷 테스트 [x] check 통과
+- 결정 기록: `src/phrases/{ko,en}.ts`가 `satisfies Phrases`(키 하나 빼고 컴파일하면 실패함을 확인) / `phrasesFor`는 ISO 표기 정규화 후 없으면 en 폴백 / 언어명은 `Intl.DisplayNames`로 팩 언어에 맞춰 렌더(파이프라인은 코드만 전달) / 스냅샷 `tests/__snapshots__/phrases.test.ts.snap` (20키 × 2언어) / CLI 화면 문구(`cli/text.ts`)와 config 오류 문구(`core/configMessages.ts`)는 메신저 팩과 별개로 유지
 
 ### T9 — e2e-mock · 상태: TODO · 의존: T7, T8
 - 목표: FakeMessenger로 SPEC §7 시나리오 전부(짧은/긴/스킵/명령 4종/동시 2채팅)를 데몬 조립 상태에서 검증.

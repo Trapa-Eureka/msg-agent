@@ -42,10 +42,6 @@ export interface PipelineDeps {
 const DEFAULT_SUPPORTED = ["pdf", "docx", "txt", "md"] as const;
 const MAX_PROGRESS_UPDATES = 4;
 
-function langName(code: string): string {
-  return canonicalLangCode(code)?.name ?? code;
-}
-
 function outputFileName(fileName: string, lang: string): string {
   const base = fileName.replace(/\.[^.]+$/u, "") || "document";
   return `${base}.${lang}.md`;
@@ -173,7 +169,7 @@ export class Pipeline {
         plan = this.rejectPlan(decision, phrases, fileName, chars, config);
         break;
       case "skip_same_lang":
-        plan = { kind: "skip_same_lang", note: phrases.skipSameLang(langName(config.nativeLang)) };
+        plan = { kind: "skip_same_lang", note: phrases.skipSameLang(config.nativeLang) };
         break;
       case "inline_full":
       case "summary_plus_file":
@@ -328,7 +324,7 @@ export class Pipeline {
           chatId,
           plan.file.name,
           new TextEncoder().encode(plan.file.content),
-          phrases.fileCaption(plan.file.name, langName(config.nativeLang)),
+          phrases.fileCaption(plan.file.name, config.nativeLang),
         );
         return;
       case "file_full":
@@ -337,7 +333,7 @@ export class Pipeline {
           chatId,
           plan.file.name,
           new TextEncoder().encode(plan.file.content),
-          phrases.fileCaption(plan.file.name, langName(config.nativeLang)),
+          phrases.fileCaption(plan.file.name, config.nativeLang),
         );
         return;
       case "skip_same_lang":
@@ -387,7 +383,7 @@ export class Pipeline {
           return;
         }
         await this.deps.settings.set({ ...config, nativeLang: info.code });
-        await this.post(cmd.chatId, this.deps.phrasesFor(info.code).langChanged(info.name));
+        await this.post(cmd.chatId, this.deps.phrasesFor(info.code).langChanged(info.code));
         return;
       }
     }
