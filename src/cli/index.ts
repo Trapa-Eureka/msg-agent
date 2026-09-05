@@ -20,14 +20,8 @@ const out = (line: string): void => {
 
 const ask: Asker = async (q) => {
   const r = await prompts(
-    q.type === "select" || q.type === "autocomplete"
-      ? {
-          type: q.type,
-          name: "v",
-          message: q.message,
-          choices: [...q.choices],
-          ...(q.type === "autocomplete" ? { limit: 8 } : {}),
-        }
+    q.type === "select"
+      ? { type: "select", name: "v", message: q.message, choices: [...q.choices] }
       : q.type === "confirm"
         ? { type: "confirm", name: "v", message: q.message, initial: q.initial ?? true }
         : { type: q.type, name: "v", message: q.message },

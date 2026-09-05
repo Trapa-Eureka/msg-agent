@@ -4,7 +4,7 @@
 
 ## 스택
 
-- Node.js 20+, TypeScript **strict** (`noUncheckedIndexedAccess` 포함)
+- Node.js 22.12+ (commander 15·`util.parseEnv` 요구), TypeScript **strict** (`noUncheckedIndexedAccess` 포함)
 - Telegram: **grammY** (타입 우수, long polling 내장) — 단 코어는 grammY를 모르고 `MessengerAdapter`만 안다
 - 문서 추출: `pdf-parse`(텍스트형 PDF), `mammoth`(DOCX), UTF-8 직독(TXT/MD)
 - 언어 감지: `franc` 계열(결정론) → 불확실 시 번역 프롬프트에 감지 위임

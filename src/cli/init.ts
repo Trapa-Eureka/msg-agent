@@ -1,9 +1,7 @@
 // Onboarding (SPEC §3): native language -> provider + key -> Telegram token. Injected prompts and verifiers.
-import { iso6393 } from "iso-639-3";
-import type { ConfigInput, Result } from "../core/index.js";
+import type { ConfigInput } from "../core/index.js";
 import {
   PROVIDER_KINDS,
-  canonicalLangCode,
   envSecretRef,
   explainConfigError,
   explainSecretError,
@@ -19,8 +17,7 @@ export type ProviderKind = (typeof PROVIDER_KINDS)[number];
 export type Question =
   | { type: "text" | "password"; message: string }
   | { type: "confirm"; message: string; initial?: boolean }
-  | { type: "select"; message: string; choices: readonly { title: string; value: string }[] }
-  | { type: "autocomplete"; message: string; choices: readonly { title: string; value: string }[] };
+  | { type: "select"; message: string; choices: readonly { title: string; value: string }[] };
 /** Returns the answer, or undefined when the user cancelled. */
 export type Asker = (q: Question) => Promise<string | boolean | undefined>;
 
@@ -67,16 +64,9 @@ export const ONBOARDING_LANGUAGES: readonly { code: string; ko: string; en: stri
 export const languageChoices = (): { title: string; value: string }[] =>
   ONBOARDING_LANGUAGES.map((l) => ({ title: `${l.ko} · ${l.en} (${l.code})`, value: l.code }));
 
-/** Resolves a name ("Korean") or code ("ko"/"kor") to a canonical code. */
-export function resolveLanguageInput(input: string): string | undefined {
-  const byCode = canonicalLangCode(input);
-  if (byCode !== undefined) return byCode.code;
-  const needle = input.trim().toLowerCase();
-  const byName = iso6393.find((l) => l.name.toLowerCase() === needle);
-  return byName === undefined ? undefined : canonicalLangCode(byName.iso6393)?.code;
-}
-
-type Step<T> = () => Promise<T | undefined>;
+/** Returned by a step when the user cancelled the prompt — aborts immediately, no retry (review 17). */
+export const CANCELLED: unique symbol = Symbol("cancelled");
+type Step<T> = () => Promise<T | undefined | typeof CANCELLED>;
 
 /** Runs `step` until it yields a value; prints the retry notice between attempts. */
 async function withAttempts<T>(
@@ -87,6 +77,7 @@ async function withAttempts<T>(
 ): Promise<T | undefined> {
   for (let i = 1; i <= attempts; i++) {
     const v = await step();
+    if (v === CANCELLED) return undefined;
     if (v !== undefined) return v;
     if (i < attempts) out(notice(attempts - i));
   }
@@ -112,18 +103,20 @@ async function secretStep(
       if (!envOffered && fromEnv !== undefined && fromEnv.trim() !== "") {
         envOffered = true;
         const use = await d.ask({ type: "confirm", message: t.useEnv(varName), initial: true });
-        if (use === undefined) return undefined;
+        if (use === undefined) return CANCELLED;
         if (use === true) {
           ref = envSecretRef(varName);
           secret = fromEnv;
         } else {
           const typed = await d.ask({ type: "password", message: askMessage });
+          if (typed === undefined) return CANCELLED;
           if (typeof typed !== "string" || typed.trim() === "") return undefined;
           ref = literalSecretRef(typed.trim());
           secret = typed.trim();
         }
       } else {
         const typed = await d.ask({ type: "password", message: askMessage });
+        if (typed === undefined) return CANCELLED;
         if (typeof typed !== "string" || typed.trim() === "") return undefined;
         ref = literalSecretRef(typed.trim());
         secret = typed.trim();
@@ -153,6 +146,7 @@ export async function runInit(d: InitDeps): Promise<number> {
   const nativeLang = await withAttempts<string>(
     async () => {
       const a = await d.ask({ type: "select", message: t.askLang, choices: languageChoices() });
+      if (a === undefined) return CANCELLED;
       return typeof a === "string" && ONBOARDING_LANGUAGES.some((l) => l.code === a)
         ? a
         : undefined;
@@ -210,10 +204,9 @@ export async function runInit(d: InitDeps): Promise<number> {
     provider: { kind, apiKeyRef },
     messenger: { kind: "telegram", tokenRef },
   };
-  const saved: Result<unknown, unknown> = saveConfig(input, d.configPath);
+  const saved = saveConfig(input, d.configPath);
   if (!saved.ok) {
-    const r = saveConfig(input, d.configPath);
-    if (!r.ok) d.out(formatExplanations(explainConfigError(r.error, ui), ui));
+    d.out(formatExplanations(explainConfigError(saved.error, ui), ui));
     d.out(t.aborted);
     return 1;
   }

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { saveConfig } from "../src/adapters/configStore.js";
 import type { Config, ConfigInput } from "../src/core/index.js";
 import type { Asker, Question, VerifyResult } from "../src/cli/init.js";
-import { languageChoices, resolveLanguageInput, runInit } from "../src/cli/init.js";
+import { languageChoices, runInit } from "../src/cli/init.js";
 import { runStart } from "../src/cli/start.js";
 import { runStatus } from "../src/cli/status.js";
 import { uiLangFor } from "../src/cli/text.js";
@@ -133,6 +133,20 @@ describe("init", () => {
     expect(() => readFileSync(configPath)).toThrow();
   });
 
+  it("cancelling a prompt aborts immediately without re-asking (review 17)", async () => {
+    const { deps, asked, lines } = initDeps(["en", "claude", undefined]);
+    expect(await runInit(deps)).toBe(1);
+    expect(asked.filter((q) => q.type === "password")).toHaveLength(1);
+    expect(lines.some((l) => l.includes("attempts left"))).toBe(false);
+    expect(lines.at(-1)).toContain("aborted");
+  });
+
+  it("an empty secret is a validation failure and is re-asked", async () => {
+    const { deps, asked } = initDeps(["en", "claude", "   ", "real-key", "tok"]);
+    expect(await runInit(deps)).toBe(0);
+    expect(asked.filter((q) => q.type === "password")).toHaveLength(3);
+  });
+
   it("re-asks an unknown language and aborts on cancel", async () => {
     const { deps, asked } = initDeps(["Nonexistentese", "tlh", undefined]);
     expect(await runInit(deps)).toBe(1);
@@ -154,8 +168,6 @@ describe("init", () => {
       "la",
     ]);
     expect(choices[0]).toEqual({ title: "한국어 · Korean (ko)", value: "ko" });
-    expect(resolveLanguageInput("KOR")).toBe("ko");
-    expect(resolveLanguageInput("Latin")).toBe("la");
   });
 });
 

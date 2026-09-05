@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decidePlan, needsFullTranslation, needsSummary } from "../src/core/outputPlanner.js";
+import { decidePlan } from "../src/core/outputPlanner.js";
 import type { PlanInput } from "../src/core/outputPlanner.js";
 
 const base: PlanInput = {
@@ -70,12 +70,5 @@ describe("edge policy", () => {
       kind: "reject",
       reason: "over_max_chars",
     });
-  });
-  it("classifies which plans need translation and summary calls", () => {
-    expect(needsFullTranslation("inline_full")).toBe(true);
-    expect(needsFullTranslation("file_full")).toBe(true);
-    expect(needsFullTranslation("skip_same_lang")).toBe(false);
-    expect(needsSummary("summary_plus_file")).toBe(true);
-    expect(needsSummary("file_full")).toBe(false);
   });
 });
