@@ -10,7 +10,8 @@ export class PdfExtractor implements DocumentExtractor {
   }
 
   async extract(bytes: Uint8Array): Promise<Result<ExtractedDoc, ExtractError>> {
-    const parser = new PDFParse({ data: bytes, verbosity: VerbosityLevel.ERRORS });
+    // pdf.js transfers (detaches) the buffer it is given; hand it a copy so callers can reuse `bytes`.
+    const parser = new PDFParse({ data: bytes.slice(), verbosity: VerbosityLevel.ERRORS });
     let text: string;
     try {
       const result = await parser.getText();
