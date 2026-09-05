@@ -23,7 +23,7 @@
 ### Telegram
 
 - [ ] **봇 토큰 발급** — @BotFather `/newbot`. 토큰은 `.env`(`TELEGRAM_BOT_TOKEN`) 또는 `~/.message/config.json`(권한 600)에만 저장. 커밋·로그 출력 금지.
-- [ ] **명령 등록** — @BotFather `/setcommands`로 `full`, `summary`, `mode`, `lang` 등록 (DESIGN §4, 자동완성 노출용).
+- [x] **명령 등록** — 불필요해짐(2026-09-05, T5): 어댑터가 `start()` 시 `setMyCommands`로 자동 등록한다. BotFather `/setcommands`는 건너뛴다.
 - [ ] **그룹 프라이버시 모드 해제** — 프라이버시 모드에서는 봇이 그룹의 일반 메시지·파일을 받지 못한다. 그룹에서 쓸 계획이면 `/setprivacy` → Disable. 스모크에서 수신 여부를 재확인해 SPEC/온보딩 문구를 갱신한다(TESTING §5).
 - [ ] **테스트 대화방** — 1:1 대화 1개 + 봇을 초대한 테스트 그룹 1개.
 
