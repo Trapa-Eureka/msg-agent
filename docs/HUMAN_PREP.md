@@ -22,15 +22,15 @@
 
 ### Telegram
 
-- [ ] **봇 토큰 발급** — @BotFather `/newbot`. 토큰은 `.env`(`TELEGRAM_BOT_TOKEN`) 또는 `~/.msg-agent/config.json`(권한 600)에만 저장. 커밋·로그 출력 금지.
+- [x] **봇 토큰 발급** — 2026-09-05 완료: `.env`의 `TELEGRAM_BOT_TOKEN`, getMe 확인(@docu_translate_bot). @BotFather `/newbot`. 토큰은 `.env`(`TELEGRAM_BOT_TOKEN`) 또는 `~/.msg-agent/config.json`(권한 600)에만 저장. 커밋·로그 출력 금지.
 - [x] **명령 등록** — 불필요해짐(2026-09-05, T5): 어댑터가 `start()` 시 `setMyCommands`로 자동 등록한다. BotFather `/setcommands`는 건너뛴다.
-- [ ] **그룹 프라이버시 모드 해제** — 프라이버시 모드에서는 봇이 그룹의 일반 메시지·파일을 받지 못한다. 그룹에서 쓸 계획이면 `/setprivacy` → Disable 후 봇을 그룹에서 제거했다가 다시 초대. `npm run smoke`가 getMe로 해제 여부를 표시한다.
+- [ ] **그룹 프라이버시 모드 해제** — 2026-09-05 getMe 기준 아직 **켜져 있음**(can_read_all_group_messages=false). 그룹에서 쓰려면 해제 필요. 프라이버시 모드에서는 봇이 그룹의 일반 메시지·파일을 받지 못한다. 그룹에서 쓸 계획이면 `/setprivacy` → Disable 후 봇을 그룹에서 제거했다가 다시 초대. `npm run smoke`가 getMe로 해제 여부를 표시한다.
 - [ ] **테스트 대화방** — 1:1 대화 1개 + 봇을 초대한 테스트 그룹 1개.
 
 ### AI 프로바이더
 
-- [ ] **Anthropic API 키** (기본 프로바이더) — 크레딧 잔액 확인. `.env`의 `ANTHROPIC_API_KEY`.
-- [ ] **OpenAI API 키** (선택) — OpenAI 어댑터까지 실검증하려면 필요. `.env`의 `OPENAI_API_KEY`.
+- [x] **Anthropic API 키** (기본 프로바이더) — 2026-09-05 완료: `.env`의 `ANTHROPIC_API_KEY`, models 조회로 검증 OK. 크레딧 잔액 확인. `.env`의 `ANTHROPIC_API_KEY`.
+- [x] **OpenAI API 키** (선택) — 2026-09-05 완료: `.env`의 `OPENAI_API_KEY`, models 조회로 검증 OK. OpenAI 어댑터까지 실검증하려면 필요. `.env`의 `OPENAI_API_KEY`.
 
 ### 스모크용 실제 문서 (SPEC §7)
 
