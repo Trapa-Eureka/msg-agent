@@ -38,6 +38,9 @@ export interface MessengerAdapter {
 
 export interface DocumentExtractor { supports(mime: string, name: string): boolean; extract(bytes: Uint8Array): Promise<ExtractedDoc> }
 export interface ExtractedDoc { text: string; sections: Section[] }        // 제목/문단 구조 유지
+export interface Section { title?: string; text: string }                  // 추출기가 복원한 구조 단위
+export interface Chunk { index: number; sectionIndex: number; text: string }   // chunker 출력, index는 조립 순서
+export interface TranslatedChunk { index: number; text: string }           // 프로바이더 출력, index로 순서 복원
 
 export interface LanguageDetector { detect(text: string): { lang: string; confidence: number } }
 
@@ -47,8 +50,9 @@ export interface TranslatorProvider {
 }
 
 export type OutputPlan =
-  | { kind: "inline_full"; parts: string[] }
-  | { kind: "summary_plus_file"; summary: string; file: { name: string; content: string } }
+  | { kind: "inline_full"; parts: string[] }                               // 짧은 문서: 채팅에 전문(분할 게시)
+  | { kind: "summary_plus_file"; summary: string; file: { name: string; content: string } }  // 긴 문서 smart/summary: 요약 + 전문 파일
+  | { kind: "file_full"; note: string; file: { name: string; content: string } }             // 긴 문서 full 모드·`/full`: 짧은 머리말 + 전문 파일
   | { kind: "skip_same_lang"; note: string }
   | { kind: "reject"; reason: string };                                    // 상한 초과·미지원 형식 등
 ```
@@ -60,11 +64,11 @@ export type OutputPlan =
 3. 언어 감지 — 감지 언어 = 모국어면 `skip_same_lang`. 신뢰도 낮으면 `sourceLangHint` 없이 번역 프롬프트에 위임
 4. `outputPlanner`: 추출 텍스트 길이 vs 임계치·사용자 모드(config) → 플랜 종류 결정
 5. 전문 경로: `chunker`(섹션 경계 우선 분할, 청크 순번 부여) → `translate` (진행 상태 n/m 갱신) → 순서대로 조립
-6. 요약 경로: `summarize` + 전문 번역은 .md 파일 조립
+6. 요약 경로: `summarize` + 전문 번역은 .md 파일 조립. full 모드에서 임계치 초과면 `file_full`(요약 호출 없이 머리말 + 전문 파일)
 7. 어댑터로 플랜 실행 → 임시 데이터 즉시 폐기 (가드레일 1)
 8. 실패 시: 청크 단위 1회 재시도 → 그래도 실패면 부분 결과 여부를 알리고 모국어 오류 안내
 
-명령 처리: `/full`은 직전 문서 재처리가 아니라 **마지막 문서의 전문 플랜 재실행** — 이를 위해 채팅별로 "마지막 문서 참조(파일 ID·메타만, 내용 아님)"를 메모리에 보관 (프로세스 재시작 시 소멸 — 의도된 동작, 가드레일 1과 일관).
+명령 처리: `/full`은 직전 문서 재처리가 아니라 **마지막 문서의 `file_full` 플랜 재실행** — 이를 위해 채팅별로 "마지막 문서 참조(파일 ID·메타만, 내용 아님)"를 메모리에 보관 (프로세스 재시작 시 소멸 — 의도된 동작, 가드레일 1과 일관).
 
 ## 4. Telegram 어댑터 메모
 
@@ -84,13 +88,24 @@ export type OutputPlan =
 ```json
 {
   "nativeLang": "ko",
-  "provider": { "kind": "claude", "apiKeyRef": "env:ANTHROPIC_API_KEY 또는 파일 내 저장" },
-  "messenger": { "kind": "telegram", "tokenRef": "..." },
+  "provider": { "kind": "claude", "apiKeyRef": "env:ANTHROPIC_API_KEY" },
+  "messenger": { "kind": "telegram", "tokenRef": "literal:123456:ABC..." },
   "mode": "smart", "inlineThresholdChars": 3000, "maxChars": 120000
 }
 ```
 
 zod 스키마로 로드 검증. CLI `status`는 설정 요약 + 봇 연결 상태 출력.
+
+**SecretRef 문법** (`apiKeyRef`·`tokenRef` 공통, 문자열 1개):
+
+| 형태 | 의미 | 비고 |
+|---|---|---|
+| `env:<VAR>` | 환경변수 `<VAR>`에서 읽는다 (권장) | `<VAR>`는 `[A-Z_][A-Z0-9_]*`. 셸 환경 또는 CWD의 `.env`(`process.loadEnvFile`, 의존성 없음) |
+| `literal:<value>` | 값을 config.json에 직접 저장 | 파일 권한 600 전제. `init`이 사용자가 키를 붙여넣고 env 저장을 거부했을 때 사용 |
+
+- 해석(`resolveSecret`)은 configStore가 담당하며, 해석 실패(env 미설정·빈 값·접두사 없음)는 원인 + 수정 방법("`.env`에 `ANTHROPIC_API_KEY=`를 추가하거나 `init`을 다시 실행")을 담은 오류로 반환한다.
+- 해석된 값은 로그·`status` 출력에 절대 노출하지 않는다. `status`는 `env:ANTHROPIC_API_KEY` / `literal:****` 형태로만 표시한다 (가드레일 4).
+- `nativeLang`는 ISO 639-1(2자) 또는 639-3(3자) 소문자 코드. `mode`는 `smart|full|summary`.
 
 ## 7. 환경변수 (.env.example로 커밋 — config 대신 env 참조도 허용)
 

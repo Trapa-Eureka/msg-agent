@@ -26,7 +26,7 @@
 
 ### T3 (레인 B) — 감지·분할·플래너 · 상태: TODO · 의존: T1
 - 목표: franc 기반 detector(+신뢰도), 섹션 경계 chunker, outputPlanner(smart 정책).
-- 완료 기준: [ ] **TESTING §3 골든 플랜 6종 전부** [ ] RTL·CJK 분할 무결성 [ ] check 통과
+- 완료 기준: [ ] **TESTING §3 골든 플랜 7종 전부** [ ] RTL·CJK 분할 무결성 [ ] check 통과
 
 ### T4 (레인 C) — 번역 프로바이더 · 상태: TODO · 의존: T1
 - 목표: TranslatorProvider 인터페이스 + Claude·OpenAI 어댑터(주입 fetch), FakeTranslator(마커·실패 주입·호출 계수), 번역·요약 프롬프트 템플릿.

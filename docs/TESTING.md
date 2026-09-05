@@ -22,7 +22,8 @@
 
 - 2,000자 영어 + 모국어 ko + smart → `inline_full`
 - 30,000자 영어 + smart → `summary_plus_file`
-- 2,000자 + mode=summary → `summary_plus_file` / 30,000자 + mode=full(상한 이내) → `inline_full`... 아님 — **full 모드도 임계치 초과면 파일 첨부로 전문 제공**(채팅 도배 방지): `summary_plus_file`에서 summary 대신 짧은 머리말. 이 정책을 케이스로 고정
+- 2,000자 + mode=summary → `summary_plus_file`
+- 30,000자 + mode=full(상한 이내) → `file_full` — **full 모드도 임계치 초과면 파일 첨부로 전문 제공**(채팅 도배 방지). 채팅에는 짧은 머리말(`note`)만, 전문은 .md 파일. 이 정책을 케이스로 고정
 - 감지=ko(모국어) → `skip_same_lang`
 - maxChars 초과 → `reject`(요약 제안 문구 포함)
 - 미지원 형식(.xlsx) → `reject`(지원 형식 안내)
@@ -41,8 +42,8 @@
 - [ ] RTL·CJK 텍스트 분할에서 문자 깨짐 없음
 
 **정책·명령**
-- [ ] 스마트 모드 골든 플랜 6종(§3) 전부
-- [ ] `/full` — 마지막 문서 전문 파일 게시, 문서 이력 없으면 안내
+- [ ] 골든 플랜 7종(§3) 전부
+- [ ] `/full` — 마지막 문서를 `file_full` 플랜으로 재실행(전문 파일 게시), 문서 이력 없으면 안내
 - [ ] `/mode`, `/lang` — config 반영·확인 메시지, 잘못된 인자 안내
 - [ ] 같은 언어 스킵 1줄 응답
 
