@@ -53,8 +53,8 @@ const claudeMessage = (text: string, stop = "end_turn"): unknown => ({
   usage: { input_tokens: 1, output_tokens: 1 },
 });
 const chunks = [
-  { index: 0, sectionIndex: 0, text: "Hello" },
-  { index: 1, sectionIndex: 0, text: "World" },
+  { index: 0, sectionIndex: 0, sep: "", text: "Hello" },
+  { index: 1, sectionIndex: 0, sep: "", text: "World" },
 ];
 
 describe("ClaudeProvider (SDK + injected fetch)", () => {

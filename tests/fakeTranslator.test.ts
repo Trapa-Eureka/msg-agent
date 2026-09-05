@@ -3,9 +3,9 @@ import { ProviderError } from "../src/core/index.js";
 import { FakeTranslator, marker } from "../src/mocks/fakeTranslator.js";
 
 const chunks = [
-  { index: 0, sectionIndex: 0, text: "a" },
-  { index: 1, sectionIndex: 0, text: "b" },
-  { index: 2, sectionIndex: 1, text: "c" },
+  { index: 0, sectionIndex: 0, sep: "", text: "a" },
+  { index: 1, sectionIndex: 0, sep: "", text: "b" },
+  { index: 2, sectionIndex: 1, sep: "", text: "c" },
 ];
 
 describe("FakeTranslator", () => {

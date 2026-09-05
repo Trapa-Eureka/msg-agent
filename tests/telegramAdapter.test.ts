@@ -256,6 +256,13 @@ describe("TelegramAdapter", () => {
     );
     expect(payloads.every((p) => p.chat_id === "55" && p.text.length <= 4096)).toBe(true);
     expect(payloads[0]?.reply_parameters).toEqual({ message_id: 7 });
+    expect(
+      sends.every(
+        (c) =>
+          (c.payload as { link_preview_options?: { is_disabled?: boolean } }).link_preview_options
+            ?.is_disabled === true,
+      ),
+    ).toBe(true); // SEC-11
     expect(payloads.slice(1).every((p) => p.reply_parameters === undefined)).toBe(true);
     expect(payloads.map((p) => p.text).join("\n\n")).toBe(text);
   });

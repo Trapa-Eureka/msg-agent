@@ -5,6 +5,7 @@ import {
   DETECT_CONFIDENCE_THRESHOLD,
   FrancDetector,
   isConfidentlySameLanguage,
+  sampleRegions,
   sourceLangHint,
 } from "../src/core/detector.js";
 
@@ -44,6 +45,24 @@ describe("FrancDetector", () => {
   it("is deterministic", () => {
     const t = fx("en-short.md");
     expect(d.detect(t)).toEqual(d.detect(t));
+  });
+});
+
+describe("mixed-language documents (R6, review 10)", () => {
+  it("does not trust a document whose head is English but whose body is Korean", () => {
+    const mixed =
+      "The vendor delivers the modules on time and invoices monthly. ".repeat(24) +
+      "공급자는 모듈을 기한 내에 납품하고 매월 청구서를 발행합니다. ".repeat(200);
+    const r = d.detect(mixed);
+    expect(r.confidence).toBeLessThan(DETECT_CONFIDENCE_THRESHOLD);
+    expect(isConfidentlySameLanguage(r, "en")).toBe(false);
+    expect(isConfidentlySameLanguage(r, "ko")).toBe(false);
+    expect(sampleRegions(mixed)).toHaveLength(3);
+  });
+  it("still trusts long uniform documents", () => {
+    expect(d.detect(fx("large-en.txt")).confidence).toBeGreaterThanOrEqual(
+      DETECT_CONFIDENCE_THRESHOLD,
+    );
   });
 });
 

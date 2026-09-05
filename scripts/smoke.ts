@@ -205,7 +205,7 @@ async function main(): Promise<number> {
   // 2b. One tiny real translation — catches request-shape errors a models lookup cannot (e.g. unsupported params)
   try {
     const probe = await createProvider(config.provider, apiKey.value).translate(
-      [{ index: 0, sectionIndex: 0, text: "Good morning. This is a connectivity check." }],
+      [{ index: 0, sectionIndex: 0, sep: "", text: "Good morning. This is a connectivity check." }],
       config.nativeLang,
       { sourceLangHint: "en" },
     );

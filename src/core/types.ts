@@ -35,6 +35,8 @@ export interface MessengerAdapter {
 /** A structural unit recovered by an extractor (heading + paragraphs). */
 export interface Section {
   title?: string;
+  /** Heading level 1–6 (default 1). */
+  level?: number;
   text: string;
 }
 
@@ -62,6 +64,8 @@ export interface Chunk {
   index: number;
   sectionIndex: number;
   text: string;
+  /** Separator that preceded this chunk inside its section ("" for the first chunk of a section). */
+  sep: string;
 }
 
 /** Provider output. Reassembled by `index`. */

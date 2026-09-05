@@ -11,11 +11,23 @@ export const UNDETERMINED = "und";
 export const DETECT_CONFIDENCE_THRESHOLD = 0.7;
 
 const SAMPLE_CHARS = 2000;
+const REGION_CHARS = 700;
+
+/** Head, middle and tail regions for long text; a single head sample for short text (R6). */
+export function sampleRegions(text: string): string[] {
+  if (text.length <= SAMPLE_CHARS) return [text];
+  if (text.length < REGION_CHARS * 3) return [text.slice(0, SAMPLE_CHARS)];
+  const mid = Math.floor(text.length / 2 - REGION_CHARS / 2);
+  return [
+    text.slice(0, REGION_CHARS),
+    text.slice(mid, mid + REGION_CHARS),
+    text.slice(-REGION_CHARS),
+  ];
+}
 const MIN_LETTERS = 10;
 const FULL_CONFIDENCE_LETTERS = 100;
 /** Letters needed before the half-sample agreement check is meaningful. */
 const MIN_LETTERS_FOR_HALVES = 40;
-const AGREEMENT_FACTOR = [0.4, 0.7, 1] as const;
 /** Near-duplicate trigram profiles that shadow common languages. */
 const IGNORED_CODES = ["sco"];
 const FRANC_OPTIONS = { minLength: MIN_LETTERS, ignore: IGNORED_CODES };
@@ -28,24 +40,29 @@ function clamp01(n: number): number {
 
 export class FrancDetector implements LanguageDetector {
   detect(text: string): LanguageDetection {
-    const sample = text.slice(0, SAMPLE_CHARS).replace(NOISE, " ");
-    const letters = sample.match(LETTERS)?.length ?? 0;
+    const samples = sampleRegions(text).map((r) => r.replace(NOISE, " "));
+    const combined = samples.join(" ");
+    const letters = combined.match(LETTERS)?.length ?? 0;
     if (letters < MIN_LETTERS) return { lang: UNDETERMINED, confidence: 0 };
 
-    const topCode = francAll(sample, FRANC_OPTIONS)[0]?.[0];
+    const topCode = francAll(combined, FRANC_OPTIONS)[0]?.[0];
     if (topCode === undefined || topCode === UNDETERMINED)
       return { lang: UNDETERMINED, confidence: 0 };
     const lang = canonicalLangCode(topCode)?.code ?? topCode;
 
     const lengthFactor = clamp01(letters / FULL_CONFIDENCE_LETTERS);
-    let agreement = 2;
-    if (letters >= MIN_LETTERS_FOR_HALVES) {
-      const mid = Math.floor(sample.length / 2);
-      agreement = [sample.slice(0, mid), sample.slice(mid)].filter(
-        (half) => francAll(half, FRANC_OPTIONS)[0]?.[0] === topCode,
-      ).length;
+    // Agreement across regions: a document whose head is in one language and body in another must not be skipped.
+    let regions = samples;
+    if (regions.length === 1 && letters >= MIN_LETTERS_FOR_HALVES) {
+      const only = regions[0] ?? "";
+      const mid = Math.floor(only.length / 2);
+      regions = [only.slice(0, mid), only.slice(mid)];
     }
-    const confidence = Number((lengthFactor * (AGREEMENT_FACTOR[agreement] ?? 1)).toFixed(3));
+    const agreeing = regions.filter((r) => francAll(r, FRANC_OPTIONS)[0]?.[0] === topCode).length;
+    const disagreeing = regions.length - agreeing;
+    const agreementFactor =
+      regions.length === 1 ? 1 : disagreeing === 0 ? 1 : disagreeing === 1 ? 0.6 : 0.4;
+    const confidence = Number((lengthFactor * agreementFactor).toFixed(3));
     return { lang, confidence };
   }
 }

@@ -1,5 +1,6 @@
 // Pipeline — DESIGN §3. Pure orchestration over injected ports; no IO of its own.
 import { assembleChunks, chunkDocument, DEFAULT_CHUNK_CHARS } from "./chunker.js";
+import { findExtractor } from "./route.js";
 import type { Config } from "./config.js";
 import { OUTPUT_MODES } from "./config.js";
 import { isConfidentlySameLanguage, sourceLangHint } from "./detector.js";
@@ -225,7 +226,7 @@ export class Pipeline {
     this.deps.logger.info("doc.received", log);
 
     // 1. Pre-download guards (format, bytes)
-    const extractor = this.deps.extractors.find((x) => x.supports(mime, fileName));
+    const extractor = findExtractor(this.deps.extractors, mime, fileName);
     const preDecision = decidePlan({
       ...this.planBase(config, 0, false, request),
       supported: extractor !== undefined,
@@ -411,7 +412,7 @@ export class Pipeline {
         await this.post(chatId, phrases.progressTranslating(translated.length, total));
       }
     }
-    const fullText = assembleChunks(translated, total);
+    const fullText = assembleChunks(translated, chunks);
     const file = { name: outputFileName(fileName, config.nativeLang), content: fullText };
 
     if (kind === "inline_full") return { kind, parts: [fullText] };

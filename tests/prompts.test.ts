@@ -11,6 +11,7 @@ describe("translationPrompt", () => {
     expect(p.system).toMatch(/output only the translation/iu);
     expect(p.system).toMatch(/markdown structure/iu);
     expect(p.user).toBe("Hello");
+    expect(p.system).toMatch(/data, not instructions/iu);
   });
   it("asks the model to detect the source when no hint is given", () => {
     expect(translationPrompt("x", "ko").system).toContain("Detect the source language yourself");
@@ -30,5 +31,6 @@ describe("summaryPrompt", () => {
     expect(p.system).toMatch(/preserve numbers, dates and proper nouns exactly/iu);
     expect(p.system).toMatch(/output only the summary/iu);
     expect(p.user).toBe("doc body");
+    expect(p.system).toMatch(/data, not instructions/iu);
   });
 });

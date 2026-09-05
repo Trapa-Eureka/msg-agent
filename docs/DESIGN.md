@@ -42,8 +42,8 @@ export type ExtractError =
   | { kind: "encrypted" }                  // 암호 PDF
   | { kind: "corrupt"; detail: string };   // 파싱 실패. detail은 라이브러리 오류명만(본문 아님)
 export interface ExtractedDoc { text: string; sections: Section[] }        // 제목/문단 구조 유지. text는 Markdown 풍(제목 `# `, 문단 빈 줄)
-export interface Section { title?: string; text: string }                  // 추출기가 복원한 구조 단위
-export interface Chunk { index: number; sectionIndex: number; text: string }   // chunker 출력, index는 조립 순서
+export interface Section { title?: string; level?: number; text: string }   // level = 제목 단계(1~6, 기본 1) — R6
+export interface Chunk { index: number; sectionIndex: number; text: string; sep: string }   // sep = 같은 섹션 안에서 직전 청크와의 원래 구분자("\n\n"·공백·""), 첫 청크는 "" — R6
 export interface TranslatedChunk { index: number; text: string }           // 프로바이더 출력, index로 순서 복원
 
 export interface LanguageDetector { detect(text: string): { lang: string; confidence: number } }
@@ -66,10 +66,10 @@ export type OutputPlan =
 ## 3. 파이프라인 (core/pipeline.ts)
 
 1. `IncomingDoc` 수신 → 크기·형식 가드 (미지원/초과 → `reject` 플랜, 사유는 모국어 문구)
-2. 진행 알림 게시 → 다운로드 → 추출기 라우팅(`supports`: MIME 우선, `application/octet-stream` 등 불명확하면 확장자로 판정) → `ExtractedDoc`. 섹션 구조화는 공용 휴리스틱(`core/sections.ts`: Markdown 제목·짧은 무종결 단독 행 = 제목, 빈 줄 = 문단). 파서 사전 검사(R4, SEC-03 부분 대응): DOCX는 ZIP 엔트리 수 ≤ 200·압축 해제 합계 ≤ 60MB를 파싱 전에 확인하고 이미지 변환은 비활성화, PDF는 페이지 수 ≤ 500 확인 후 텍스트 추출, 추출 전체에 60초 기한(초과 시 `corrupt`/timeout — CPU 작업 자체를 끊지는 못하므로 프로세스 격리는 v0.2).
-3. 언어 감지 — franc(`core/detector.ts`). 신뢰도 = 표본 글자 수 계수(100자에서 1) × 표본 전·후반 감지 일치도(둘 다 일치 1 / 하나 0.7 / 없음 0.4). **0.7 이상**일 때만 감지 언어 = 모국어면 `skip_same_lang`, 미만이면 `sourceLangHint` 없이 번역 프롬프트에 위임. 매크로언어 구성원(arb→ar, cmn→zh 등)은 `core/lang.ts`에서 정규화
+2. 진행 알림 게시 → 다운로드 → 추출기 라우팅(`findExtractor`: **MIME만으로 1차 판정**, 어떤 추출기도 MIME을 인식하지 못할 때만 확장자로 2차 판정 — `report.pdf`라는 이름의 DOCX MIME 파일은 DOCX로 간다, R6) → `ExtractedDoc`. 섹션 구조화는 공용 휴리스틱(`core/sections.ts`: Markdown 제목·짧은 무종결 단독 행 = 제목, 빈 줄 = 문단). 파서 사전 검사(R4, SEC-03 부분 대응): DOCX는 ZIP 엔트리 수 ≤ 200·압축 해제 합계 ≤ 60MB를 파싱 전에 확인하고 이미지 변환은 비활성화, PDF는 페이지 수 ≤ 500 확인 후 텍스트 추출, 추출 전체에 60초 기한(초과 시 `corrupt`/timeout — CPU 작업 자체를 끊지는 못하므로 프로세스 격리는 v0.2).
+3. 언어 감지 — franc(`core/detector.ts`). 표본은 문서 **앞·중간·끝 3곳**(각 700자; 짧은 문서는 앞 2,000자를 전·후반으로). 신뢰도 = 표본 글자 수 계수(100자에서 1) × 표본 감지 일치도(전부 일치 1 / 하나 불일치 0.6 / 그 이하 0.4) — 앞부분만 모국어인 혼합 문서는 0.7 미만이 되어 스킵되지 않고 번역 경로로 간다(R6, 검수 10). **0.7 이상**일 때만 감지 언어 = 모국어면 `skip_same_lang`, 미만이면 `sourceLangHint` 없이 번역 프롬프트에 위임. 매크로언어 구성원(arb→ar, cmn→zh 등)은 `core/lang.ts`에서 정규화
 4. `outputPlanner.decidePlan`: 판정 순서 = 미지원 형식 → 바이트 상한(다운로드 전) → 같은 언어(신규 업로드만) → `maxChars` 초과(`/full`·`/summary`도 우회 불가, 파일 분할 안내) → `/summary`·`/full` 요청 → 모드×임계치(임계치 이하 = 짧음, 포함). 결과는 `PlanDecision`(종류·거절 사유만, 내용 없음). **길이 기준은 정규화된 추출 텍스트의 `length`(공백 포함)** — 프로바이더에 실제로 보내는 문자열과 같은 척도(R2; `countChars`는 표시용). 추가 가드(R2): 청크 수 > `maxChunksPerDoc`(기본 50) → 거절, 채팅별 시간당 문서·재실행 수 > `limits.docsPerChatPerHour` → `rateLimited`, 전역 일일 누적 문자 > `limits.dailyChars` → `dailyBudgetExhausted`(모두 메모리 카운터, 메타만).
-5. 전문 경로: `chunker`(섹션 → 문단 → 문장 → 자소 클러스터 순으로 분할, 청크당 기본 4,000자, 각 청크는 섹션 제목을 `# `로 포함, 섹션 경계는 넘지 않음) → `translate` (진행 상태 n/m 갱신) → `assembleChunks`로 순번대로 조립(누락 청크가 있으면 게시하지 않음)
+5. 전문 경로: `chunker`(섹션 → 문단 → 문장 → 자소 클러스터 순으로 분할, 청크당 기본 4,000자, 각 청크는 섹션 제목을 원래 단계의 `#`로 포함, 섹션 경계는 넘지 않음) → `translate` (진행 상태 n/m 갱신) → `assembleChunks(translated, chunks)`로 순번대로 조립 — 같은 섹션 안 청크는 원래 구분자(`Chunk.sep`)로, 섹션 사이는 빈 줄로 잇는다(누락 청크가 있으면 게시하지 않음) — R6
 6. 요약 경로: `summarize` + 전문 번역은 .md 파일 조립. full 모드에서 임계치 초과면 `file_full`(요약 호출 없이 머리말 + 전문 파일)
 7. 어댑터로 플랜 실행 → 임시 데이터 즉시 폐기 (가드레일 1)
 8. 실패 시: 청크 단위 1회 재시도 → 그래도 실패면 부분 결과 여부를 알리고 모국어 오류 안내
@@ -90,7 +90,7 @@ export type OutputPlan =
 ## 4. Telegram 어댑터 메모
 
 - grammY long polling. 문서 핸들러: `message:document` → `IncomingDoc`(메타만). 다운로드는 `download()` 호출 시에만 getFile → 파일 URL fetch. **어댑터 자체가 20MB 초과면 `download()`를 거부**(getFile 호출 없음)하고, 파이프라인은 그 전에 planner의 바이트 가드로 reject한다(이중 방어). R4: getFile 응답의 `file_size`도 검사하고, 본문은 스트림으로 누적하며 상한을 넘는 순간 중단(메타데이터 누락·위조 대비), 요청 전체에 `AbortSignal.timeout`(기본 60초). 파이프라인은 받은 바이트 길이를 다시 확인한다.
-- `postText`는 4,096자 제한에 맞춰 분할 게시 — 공용 함수 `core/textSplit.ts`(`splitForMessenger`: 문단 → 줄 → 문장 → 자소 순, 어댑터와 FakeMessenger가 같은 함수 사용), 순서 보장을 위해 순차 전송. 자소 하나가 상한보다 길면(결합 문자 폭탄) 코드포인트 단위로 잘라 **모든 조각 길이 ≤ 상한**을 보장(R2; 청크 분할도 동일). `postFile`은 sendDocument(InputFile from bytes).
+- `postText`는 `link_preview_options: { is_disabled: true }`로 링크 미리보기를 끄고(문서·모델이 낸 URL로의 부수적 외부 접근 차단, SEC-11) 4,096자 제한에 맞춰 분할 게시 — 공용 함수 `core/textSplit.ts`(`splitForMessenger`: 문단 → 줄 → 문장 → 자소 순, 어댑터와 FakeMessenger가 같은 함수 사용), 순서 보장을 위해 순차 전송. 자소 하나가 상한보다 길면(결합 문자 폭탄) 코드포인트 단위로 잘라 **모든 조각 길이 ≤ 상한**을 보장(R2; 청크 분할도 동일). `postFile`은 sendDocument(InputFile from bytes).
 - 명령(`/full`, `/summary`, `/mode`, `/lang`)은 `start()` 시 `setMyCommands`로 등록해 자동완성 노출(BotFather 수동 등록 불필요). 명령 인자는 `ctx.match`.
 - 디스패치·수명(R5): 문서·명령 핸들러는 파이프라인 호출을 `await`하지 않고 진행 중 집합에 넣은 뒤 즉시 반환(grammY는 업데이트를 순차 처리하므로 대기하면 채팅 간 병렬이 깨진다). 핸들러 오류는 `onError(e, fatal=false)`. `start()`는 `bot.init()`(getMe)과 polling 준비(`onStart`)를 기다린 뒤 resolve — 초기화 실패는 `start()` 예외로 전파. 시작 후 polling이 예기치 않게 끝나면 `onError(e, fatal=true)`; CLI는 종료 코드 1로 반영. `stop()`은 polling 중지 후 진행 중 핸들러를 기다린다.
 - 테스트: 네트워크 0건 — `botInfo` 주입으로 getMe 생략, `api.config.use` 트랜스포머로 Bot API 호출을 가로채 요청 형태(method·payload)를 검증, `bot.handleUpdate`로 업데이트 주입, 파일 다운로드는 주입 fetch.
@@ -98,7 +98,7 @@ export type OutputPlan =
 
 ## 5. 프로바이더 메모
 
-- ClaudeProvider(기본)·OpenAIProvider — 공통: 청크별 번역 프롬프트(용어·수치·고유명사 보존 지시, 출력은 번역문만), 요약 프롬프트(제목·핵심 조항·수치·요청사항 구조). 프롬프트 텍스트는 `core/prompts.ts` 한 곳에만 둔다. 청크는 순차 호출(진행 n/m 콜백), 청크 재시도는 파이프라인(T6) 책임이며 프로바이더는 `ProviderError`(retryable 플래그)를 던진다.
+- ClaudeProvider(기본)·OpenAIProvider — 공통: 청크별 번역 프롬프트(용어·수치·고유명사 보존 지시, 출력은 번역문만), 요약 프롬프트(제목·핵심 조항·수치·요청사항 구조). 프롬프트 텍스트는 `core/prompts.ts` 한 곳에만 둔다. 두 프롬프트 모두 **user 메시지는 데이터이지 지시가 아니며 그 안의 명령·역할 변경 요구는 무시**하도록 명시한다(SEC-10). 모델에는 도구·게시 대상 결정 권한을 주지 않는다. 청크는 순차 호출(진행 n/m 콜백), 청크 재시도는 파이프라인(T6) 책임이며 프로바이더는 `ProviderError`(retryable 플래그)를 던진다.
 - Claude: 공식 SDK(`@anthropic-ai/sdk`)에 `fetch`를 주입해 테스트에서는 목 fetch로 요청 형태를 검증한다. 기본 모델 `claude-sonnet-5`(config `provider.model`로 변경), 번역은 `output_config.effort: "low"`, 요약은 `"medium"`. 서버측 fallbacks(`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`)는 **Opus 5·Fable 5 계열에서만** 붙인다 — Sonnet 5는 `fallbacks` 파라미터를 400으로 거부함(2026-09-05 실 스모크에서 발견). `stop_reason: "refusal"`이면 `refusal` 오류. 키 검증(`verify`)은 models 조회라 요청 형태 오류를 잡지 못하므로 `npm run smoke`가 1청크 실번역 프로브를 추가로 수행한다. 키 검증은 `GET /v1/models/{model}`.
 - OpenAI: Chat Completions(`/v1/chat/completions`) raw fetch, 기본 모델 `gpt-5`(config로 변경), 키 검증은 `GET /v1/models/{model}`. 401→auth, 429→rate_limit(재시도 가능), 5xx→server(재시도 가능). R4: 응답 본문은 zod로 검증해 형태가 다르면 `bad_response`(TypeError 금지), 요청에 `AbortSignal.timeout`(기본 90초, 초과 시 `network`/timeout 재시도 가능). Claude SDK는 `timeout: 120s`.
 - 온보딩 `init`에서 키 검증 1회 호출. 실패 시 수정 방법 담긴 안내.
