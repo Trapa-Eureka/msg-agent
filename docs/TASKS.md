@@ -36,9 +36,10 @@
 - 완료 기준: [x] 목 fetch로 요청 형태 검증 [x] 프롬프트에 "수치·고유명사 보존, 번역문만 출력" 명시 [x] check 통과
 - 결정 기록: Claude는 공식 SDK에 `fetch` 주입(요청 형태는 목 fetch로 검증), 기본 `claude-sonnet-5`(사용자 결정, 비용)·번역 effort low·요약 medium·서버측 fallbacks 적용 / OpenAI는 Chat Completions raw fetch, 기본 `gpt-5` / 오류는 `ProviderError`(kind·retryable·status·detail=오류명만)로 통일, 청크 재시도는 T6 파이프라인 / `verify()`는 models 조회로 토큰 소모 없음 / 프롬프트는 `core/prompts.ts` 한 곳
 
-### T5 (레인 D) — Telegram 어댑터 + FakeMessenger · 상태: TODO · 의존: T1
+### T5 (레인 D) — Telegram 어댑터 + FakeMessenger · 상태: DONE(2026-09-05) · 의존: T1
 - 목표: grammY 어댑터(문서 이벤트→IncomingDoc, 명령 라우팅, 4,096자 분할 postText, sendDocument), FakeMessenger(동일 분할 규칙).
-- 완료 기준: [ ] 분할 규칙 단위 테스트(어댑터·페이크 공용 함수) [ ] 20MB 초과 메타 → 다운로드 미시도 [ ] 실호출 없는 요청 형태 테스트 [ ] check 통과
+- 완료 기준: [x] 분할 규칙 단위 테스트(어댑터·페이크 공용 함수) [x] 20MB 초과 메타 → 다운로드 미시도 [x] 실호출 없는 요청 형태 테스트 [x] check 통과
+- 결정 기록: 분할 규칙은 `core/textSplit.ts`(문단→줄→문장→자소) 하나를 어댑터·페이크가 공유 / `download()`는 지연 실행이며 어댑터가 20MB 초과를 자체 거부(getFile 미호출) / 명령 자동완성은 `start()`에서 `setMyCommands` / 테스트는 `botInfo` 주입 + `api.config.use` 트랜스포머 + `handleUpdate` + 주입 fetch로 네트워크 0건 / 분할 게시 시 첫 파트만 원본 메시지에 reply
 
 ### T6 — 파이프라인 · 상태: TODO · 의존: T2, T3, T4, T5
 - 목표: `core/pipeline.ts` — DESIGN §3의 8단계 + 명령 처리(마지막 문서 참조는 메모리·메타만).

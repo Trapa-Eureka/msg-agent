@@ -45,6 +45,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
     "franc": "^6.2.0",
+    "grammy": "^1.46.0",
     "iso-639-3": "^3.0.1",
     "mammoth": "^1.12.2",
     "pdf-parse": "^2.4.5",

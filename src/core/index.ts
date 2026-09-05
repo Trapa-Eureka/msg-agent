@@ -12,3 +12,4 @@ export * from "./detector.js";
 export * from "./chunker.js";
 export * from "./outputPlanner.js";
 export * from "./prompts.js";
+export * from "./textSplit.js";

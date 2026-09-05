@@ -78,9 +78,10 @@ export type OutputPlan =
 
 ## 4. Telegram 어댑터 메모
 
-- grammY long polling. 문서 핸들러: `message:document` → getFile → 다운로드(봇 한도 20MB — 초과 시 reject 플랜).
-- `postText`는 4,096자 제한에 맞춰 문단 경계로 분할 게시. `postFile`은 sendDocument.
-- 명령은 BotFather에 등록(`/full`, `/summary`, `/mode`, `/lang`) — 자동완성 노출.
+- grammY long polling. 문서 핸들러: `message:document` → `IncomingDoc`(메타만). 다운로드는 `download()` 호출 시에만 getFile → 파일 URL fetch. **어댑터 자체가 20MB 초과면 `download()`를 거부**(getFile 호출 없음)하고, 파이프라인은 그 전에 planner의 바이트 가드로 reject한다(이중 방어).
+- `postText`는 4,096자 제한에 맞춰 분할 게시 — 공용 함수 `core/textSplit.ts`(`splitForMessenger`: 문단 → 줄 → 문장 → 자소 순, 어댑터와 FakeMessenger가 같은 함수 사용), 순서 보장을 위해 순차 전송. `postFile`은 sendDocument(InputFile from bytes).
+- 명령(`/full`, `/summary`, `/mode`, `/lang`)은 `start()` 시 `setMyCommands`로 등록해 자동완성 노출(BotFather 수동 등록 불필요). 명령 인자는 `ctx.match`.
+- 테스트: 네트워크 0건 — `botInfo` 주입으로 getMe 생략, `api.config.use` 트랜스포머로 Bot API 호출을 가로채 요청 형태(method·payload)를 검증, `bot.handleUpdate`로 업데이트 주입, 파일 다운로드는 주입 fetch.
 - 그룹에서는 봇 프라이버시 모드 이슈로 문서 수신만 처리(문서는 프라이버시 모드에서도 수신됨을 스모크로 확인, 아니면 온보딩 안내에 프라이버시 해제 절차 추가).
 
 ## 5. 프로바이더 메모
