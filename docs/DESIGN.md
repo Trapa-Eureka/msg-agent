@@ -17,7 +17,7 @@ adapters/telegramAdapter (grammY) ──────► core/pipeline.ts
                                                └ outputPlanner (smart 정책)
 ```
 
-코어는 메신저·프로바이더 구현을 모른다. 이벤트는 정규화된 `IncomingDoc`/`IncomingCommand`로, 출력은 `OutputPlan`으로만 주고받는다.
+코어는 메신저·프로바이더 구현을 모른다. 이벤트는 정규화된 `IncomingDoc`/`IncomingCommand`로, 출력은 `OutputPlan`으로만 주고받는다. 실패는 throw 대신 `Result<T, E>`(core/result.ts)로 돌려 사용자 문구를 T8 문구 팩에서 렌더한다.
 
 ## 2. 핵심 인터페이스 (core/types.ts)
 
@@ -36,8 +36,12 @@ export interface MessengerAdapter {
   start(): Promise<void>; stop(): Promise<void>;
 }
 
-export interface DocumentExtractor { supports(mime: string, name: string): boolean; extract(bytes: Uint8Array): Promise<ExtractedDoc> }
-export interface ExtractedDoc { text: string; sections: Section[] }        // 제목/문단 구조 유지
+export interface DocumentExtractor { supports(mime: string, name: string): boolean; extract(bytes: Uint8Array): Promise<Result<ExtractedDoc, ExtractError>> }
+export type ExtractError =
+  | { kind: "empty_text" }                 // 텍스트 레이어 없음(스캔본) → v0.2 OCR 안내
+  | { kind: "encrypted" }                  // 암호 PDF
+  | { kind: "corrupt"; detail: string };   // 파싱 실패. detail은 라이브러리 오류명만(본문 아님)
+export interface ExtractedDoc { text: string; sections: Section[] }        // 제목/문단 구조 유지. text는 Markdown 풍(제목 `# `, 문단 빈 줄)
 export interface Section { title?: string; text: string }                  // 추출기가 복원한 구조 단위
 export interface Chunk { index: number; sectionIndex: number; text: string }   // chunker 출력, index는 조립 순서
 export interface TranslatedChunk { index: number; text: string }           // 프로바이더 출력, index로 순서 복원
@@ -60,7 +64,7 @@ export type OutputPlan =
 ## 3. 파이프라인 (core/pipeline.ts)
 
 1. `IncomingDoc` 수신 → 크기·형식 가드 (미지원/초과 → `reject` 플랜, 사유는 모국어 문구)
-2. 진행 알림 게시 → 다운로드 → 추출기 라우팅(`supports`) → `ExtractedDoc`
+2. 진행 알림 게시 → 다운로드 → 추출기 라우팅(`supports`: MIME 우선, `application/octet-stream` 등 불명확하면 확장자로 판정) → `ExtractedDoc`. 섹션 구조화는 공용 휴리스틱(`core/sections.ts`: Markdown 제목·짧은 무종결 단독 행 = 제목, 빈 줄 = 문단)
 3. 언어 감지 — 감지 언어 = 모국어면 `skip_same_lang`. 신뢰도 낮으면 `sourceLangHint` 없이 번역 프롬프트에 위임
 4. `outputPlanner`: 추출 텍스트 길이 vs 임계치·사용자 모드(config) → 플랜 종류 결정
 5. 전문 경로: `chunker`(섹션 경계 우선 분할, 청크 순번 부여) → `translate` (진행 상태 n/m 갱신) → 순서대로 조립

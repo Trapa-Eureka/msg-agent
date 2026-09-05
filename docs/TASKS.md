@@ -21,9 +21,10 @@
 - 완료 기준: [x] 설정 라운드트립·오류 케이스(필수 누락·잘못된 언어코드 → 수정 방법 안내) 테스트 [x] check 통과
 - 결정 기록: 오류는 throw 대신 `Result` + 코드(`ConfigIssue`)로 반환하고 문구는 `core/configMessages.ts`(ko/en)에만 둔다 → T8 문구 팩으로 이관 / 언어 코드 검증·정규화는 `iso-639-3` 테이블(639-1 우선) / `.env`는 의존성 없이 `process.loadEnvFile` / 시크릿은 `redactSecretRef`로만 표시
 
-### T2 (레인 A) — 추출기 3종 · 상태: TODO · 의존: T1
+### T2 (레인 A) — 추출기 3종 · 상태: DONE(2026-09-05) · 의존: T1
 - 목표: pdf-parse·mammoth·UTF-8 추출기 + 섹션 구조화, `fixtures/docs/` 제작(TESTING §2 목록 전부).
-- 완료 기준: [ ] 형식별 정상 추출 테스트 [ ] 빈 텍스트·암호 PDF가 명확한 실패 타입 반환 [ ] check 통과
+- 완료 기준: [x] 형식별 정상 추출 테스트 [x] 빈 텍스트·암호 PDF가 명확한 실패 타입 반환 [x] check 통과
+- 결정 기록: `extract`는 `Result<ExtractedDoc, ExtractError>`(empty_text | encrypted | corrupt) 반환 / 섹션 구조화는 `core/sections.ts` 공용(빈 줄·Markdown 제목·짧은 무종결 행) + PDF 전용 행 복원(`pdfPagesToText`: 페이지 최장 행 대비 짧은 행 = 제목·문단 끝, CJK 줄바꿈은 공백 없이 결합) / DOCX 제목은 `#` Markdown으로 변환해 같은 휴리스틱 사용 / 픽스처는 `scripts/fixtures/generate.ts`(pdfkit·docx, macOS 폰트)로 생성해 커밋
 
 ### T3 (레인 B) — 감지·분할·플래너 · 상태: TODO · 의존: T1
 - 목표: franc 기반 detector(+신뢰도), 섹션 경계 chunker, outputPlanner(smart 정책).
