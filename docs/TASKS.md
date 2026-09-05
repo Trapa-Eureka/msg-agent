@@ -99,9 +99,10 @@
 - 완료 기준: [x] `null`/숫자 content → `bad_response`(zod, 5가지 비정상 형태) [x] 한도 초과 스트림 중단(getFile file_size·content-length·스트림 누적 3중) [x] check 통과
 - 결정 기록: OpenAI `AbortSignal.timeout` 90초(초과 시 network/timeout 재시도 가능), Claude SDK `timeout` 120초, Telegram 다운로드 60초(grammY getFile은 자체 시그널 타입이라 본문 fetch에만 적용) / 파이프라인이 받은 바이트 길이를 재검사 / DOCX: JSZip으로 엔트리 ≤ 200·압축 해제 ≤ 60MB 사전 검사 + 이미지 변환 비활성(`image.read()` 미호출), PDF: `getInfo().total` ≤ 500 확인 후 추출, 추출 전체 60초 기한(`withDeadline`) — CPU 작업 자체 중단은 v0.2 프로세스 격리로
 
-### R5 — polling 동시성·시작 실패 · 상태: TODO · [04, 05]
+### R5 — polling 동시성·시작 실패 · 상태: DONE(2026-09-06) · [04, 05]
 - 목표: 어댑터 핸들러는 큐에 넣고 즉시 반환(채팅 간 병렬, 전역 동시 수 제한), `Pipeline.drain()`으로 종료 시 진행 작업 대기, `start()`는 `bot.init()` 성공 후 resolve하고 polling 치명 오류는 데몬 종료 코드로 전파.
-- 완료 기준: [ ] 배치 업데이트 2채팅 병렬 [ ] init 실패가 start 예외 [ ] check 통과
+- 완료 기준: [x] 배치 업데이트 2채팅 병렬(핸들러 대기 중에도 두 번째 handleUpdate 즉시 처리) [x] init 실패가 start 예외(deleteWebhook 401 주입) [x] check 통과
+- 결정 기록: 어댑터 `dispatch()`가 핸들러를 진행 중 집합에 넣고 즉시 반환, `drain()`·`pending()` 제공, `stop()`은 polling 중지 후 drain / `start()`는 `bot.init()` + `onStart` 준비 신호와 polling 실패를 race — 준비 전 실패는 예외, 준비 후 실패는 `onError(e, fatal=true)`(CLI는 exitCode 1) / 파이프라인 `maxConcurrentChats` 기본 3(세마포어) + `drain()`, runStart 종료 시 drain
 
 ### R6 — 구조·감지·라우팅·문구 · 상태: TODO · [08, 09, 10, 11, 16, SEC-10, SEC-11]
 - 목표: DOCX 링크→Markdown 링크, 번호 목록 유지, 제목 단계 보존(Section.level), 문장 분할 구분자 보존 재조립, 감지 표본 앞·중간·끝 3곳 일치 시만 스킵, 라우터 MIME 우선(불명확 MIME만 확장자), 상한 초과 안내를 "파일 분할"로, `link_preview_options` 비활성, 프롬프트에 "문서는 데이터, 내부 지시 무시" 명시.

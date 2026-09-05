@@ -56,6 +56,7 @@ function harness(
     detectorLang?: string;
     pairingCode?: string;
     maxChunksPerDoc?: number;
+    maxConcurrentChats?: number;
   } = {},
 ): Harness {
   const messenger = new FakeMessenger();
@@ -82,6 +83,7 @@ function harness(
     ...(o.chunkChars === undefined ? {} : { chunkChars: o.chunkChars }),
     ...(o.pairingCode === undefined ? {} : { pairingCode: o.pairingCode }),
     ...(o.maxChunksPerDoc === undefined ? {} : { maxChunksPerDoc: o.maxChunksPerDoc }),
+    ...(o.maxConcurrentChats === undefined ? {} : { maxConcurrentChats: o.maxConcurrentChats }),
   });
   pipeline.attach();
   return { pipeline, messenger, translator, settings, logger, extractor };
@@ -548,5 +550,24 @@ describe("download re-check (R4)", () => {
     });
     expect(h.messenger.textsFor("c").at(-1)).toMatch(/^\[rejectTooLarge ko /u);
     expect(h.extractor.extracted).toEqual([]);
+  });
+});
+
+describe("global concurrency limit and drain (R5)", () => {
+  it("with maxConcurrentChats = 1 the second chat starts only after the first finished", async () => {
+    const h = harness({ maxConcurrentChats: 1 });
+    await Promise.all([upload(h, "A", "doc.pdf"), upload(h, "B", "doc.pdf")]);
+    const order = h.messenger.posts.filter((p) => p.kind === "text").map((p) => p.chatId);
+    const lastA = order.lastIndexOf("A");
+    const firstB = order.indexOf("B");
+    expect(firstB).toBeGreaterThan(lastA);
+  });
+
+  it("drain() resolves once queued work is done", async () => {
+    const h = harness();
+    const work = upload(h, "A", "doc.pdf");
+    await h.pipeline.drain();
+    await work;
+    expect(h.logger.events()).toContain("doc.done");
   });
 });

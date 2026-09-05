@@ -35,11 +35,18 @@ function apiRecorder(): { transformer: Transformer; calls: ApiCall[] } {
   const transformer: Transformer = (_prev, method, payload) => {
     calls.push({ method, payload });
     const result: unknown =
-      method === "getFile"
-        ? { file_id: "f1", file_unique_id: "u1", file_size: 3, file_path: "documents/file_1.pdf" }
-        : method === "sendMessage" || method === "sendDocument"
-          ? { message_id: 100 + calls.length, date: 0, chat: { id: 1, type: "private" }, text: "" }
-          : true;
+      method === "getUpdates"
+        ? []
+        : method === "getFile"
+          ? { file_id: "f1", file_unique_id: "u1", file_size: 3, file_path: "documents/file_1.pdf" }
+          : method === "sendMessage" || method === "sendDocument"
+            ? {
+                message_id: 100 + calls.length,
+                date: 0,
+                chat: { id: 1, type: "private" },
+                text: "",
+              }
+            : true;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return Promise.resolve({ ok: true, result } as any);
   };
@@ -275,5 +282,61 @@ describe("TelegramAdapter", () => {
       (set?.payload as { commands: { command: string }[] }).commands.map((c) => c.command),
     ).toEqual(["full", "summary", "mode", "lang", "allow", "deny"]);
     await adapter.stop();
+  });
+});
+
+describe("dispatch and lifecycle (R5)", () => {
+  it("does not block the update loop: handlers run concurrently and stop() waits for them", async () => {
+    const { adapter } = makeAdapter();
+    const release: (() => void)[] = [];
+    const seen: string[] = [];
+    adapter.onDocument((d) => {
+      seen.push(d.chatId);
+      return new Promise<void>((resolve) => release.push(resolve));
+    });
+    await adapter.bot.handleUpdate(documentUpdate({ chatId: 1, sizeBytes: 1 }));
+    await adapter.bot.handleUpdate(documentUpdate({ chatId: 2, sizeBytes: 1 }));
+    // both handlers were invoked although neither has finished (the old code awaited the first one)
+    expect(seen).toEqual(["1", "2"]);
+    expect(adapter.pending()).toBe(2);
+    let drained = false;
+    const drain = adapter.drain().then(() => {
+      drained = true;
+    });
+    await Promise.resolve();
+    expect(drained).toBe(false);
+    for (const r of release) r();
+    await drain;
+    expect(adapter.pending()).toBe(0);
+  });
+
+  it("reports handler failures through onError without stopping the bot", async () => {
+    const errors: [string, boolean][] = [];
+    const api = apiRecorder();
+    const adapter = new TelegramAdapter({
+      token: "t",
+      botInfo,
+      apiTransformer: api.transformer,
+      onError: (e, fatal) => errors.push([e instanceof Error ? e.message : "?", fatal]),
+    });
+    adapter.onDocument(() => Promise.reject(new Error("handler boom")));
+    await adapter.bot.handleUpdate(documentUpdate({ chatId: 1, sizeBytes: 1 }));
+    await adapter.drain();
+    expect(errors).toEqual([["handler boom", false]]);
+  });
+
+  it("start() rejects when polling cannot be initialized (review 05)", async () => {
+    const adapter = new TelegramAdapter({
+      token: "t",
+      botInfo,
+      apiTransformer: (_prev, method) =>
+        Promise.resolve(
+          method === "deleteWebhook"
+            ? { ok: false, error_code: 401, description: "Unauthorized" }
+            : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ({ ok: true, result: method === "getUpdates" ? [] : true } as any),
+        ),
+    });
+    await expect(adapter.start()).rejects.toThrow(/Unauthorized|401/u);
   });
 });

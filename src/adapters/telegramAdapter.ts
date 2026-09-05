@@ -37,8 +37,8 @@ export interface TelegramAdapterOptions {
   maxDownloadBytes?: number;
   /** Whole-download deadline (getFile + body). Default 60 s. */
   downloadTimeoutMs?: number;
-  /** Called when long polling stops because of an error. */
-  onError?: (error: unknown) => void;
+  /** Handler errors (fatal=false) and unexpected polling termination after start (fatal=true). */
+  onError?: (error: unknown, fatal: boolean) => void;
 }
 
 type DocHandler = (d: IncomingDoc) => Promise<void>;
@@ -50,7 +50,8 @@ export class TelegramAdapter implements MessengerAdapter {
   private readonly fetchImpl: typeof fetch;
   private readonly maxBytes: number;
   private readonly downloadTimeoutMs: number;
-  private readonly onError: ((e: unknown) => void) | undefined;
+  private readonly onError: ((e: unknown, fatal: boolean) => void) | undefined;
+  private readonly inFlight = new Set<Promise<void>>();
   private docHandler: DocHandler | undefined;
   private cmdHandler: CmdHandler | undefined;
   private polling: Promise<void> | undefined;
@@ -64,25 +65,27 @@ export class TelegramAdapter implements MessengerAdapter {
     this.bot = new Bot(opts.token, opts.botInfo === undefined ? {} : { botInfo: opts.botInfo });
     if (opts.apiTransformer !== undefined) this.bot.api.config.use(opts.apiTransformer);
 
-    this.bot.command([...COMMAND_NAMES], async (ctx) => {
+    this.bot.command([...COMMAND_NAMES], (ctx) => {
       const name = ctx.message?.text.slice(1).split(/[\s@]/u)[0] as CommandName | undefined;
       if (name === undefined || !COMMAND_NAMES.includes(name)) return;
       const arg =
         typeof ctx.match === "string" && ctx.match.trim() !== "" ? ctx.match.trim() : undefined;
       const userId = ctx.from === undefined ? undefined : String(ctx.from.id);
-      await this.cmdHandler?.({
+      const cmd = {
         chatId: String(ctx.chat.id),
         ...(userId === undefined ? {} : { userId }),
         name,
         ...(arg === undefined ? {} : { arg }),
-      });
+      };
+      this.dispatch(() => this.cmdHandler?.(cmd) ?? Promise.resolve());
     });
-    this.bot.on("message:document", async (ctx) => {
-      await this.docHandler?.(this.toIncomingDoc(ctx));
+    this.bot.on("message:document", (ctx) => {
+      const doc = this.toIncomingDoc(ctx);
+      this.dispatch(() => this.docHandler?.(doc) ?? Promise.resolve());
     });
     // Metadata-only error reporting — never the update body (guardrail 1).
     this.bot.catch((err) => {
-      this.onError?.(err.error);
+      this.onError?.(err.error, false);
     });
   }
 
@@ -159,19 +162,65 @@ export class TelegramAdapter implements MessengerAdapter {
     );
   }
 
+  /** Runs a handler without blocking grammY's sequential update loop; tracked so stop() can wait. */
+  private dispatch(run: () => Promise<void>): void {
+    const p = run()
+      .catch((e: unknown) => {
+        this.onError?.(e, false);
+      })
+      .finally(() => {
+        this.inFlight.delete(p);
+      });
+    this.inFlight.add(p);
+  }
+
+  /** Number of handlers still running. */
+  pending(): number {
+    return this.inFlight.size;
+  }
+
+  /** Resolves when every dispatched handler has finished. */
+  async drain(): Promise<void> {
+    while (this.inFlight.size > 0) await Promise.allSettled([...this.inFlight]);
+  }
+
+  /**
+   * Resolves once the bot is initialized (getMe) and polling is actually running; rejects on any
+   * initialization failure. A polling failure after that point is reported via onError(e, true).
+   */
   async start(): Promise<void> {
+    await this.bot.init();
     await this.bot.api.setMyCommands(
       TELEGRAM_COMMANDS.map((c) => ({ command: c.command, description: c.description })),
     );
-    this.polling = this.bot.start().catch((e: unknown) => {
-      this.onError?.(e);
+    let ready!: () => void;
+    const readyPromise = new Promise<void>((resolve) => {
+      ready = resolve;
     });
+    let started = false;
+    const polling = this.bot.start({
+      onStart: () => {
+        started = true;
+        ready();
+      },
+    });
+    const lifecycle = polling.then(
+      () => undefined,
+      (e: unknown) => {
+        if (started) this.onError?.(e, true);
+        throw e;
+      },
+    );
+    // Either polling is up, or it failed before becoming ready (rejects start()).
+    await Promise.race([readyPromise, lifecycle]);
+    this.polling = lifecycle.catch(() => undefined);
   }
 
   async stop(): Promise<void> {
     await this.bot.stop();
     await this.polling;
     this.polling = undefined;
+    await this.drain();
   }
 }
 

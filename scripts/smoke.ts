@@ -239,8 +239,10 @@ async function main(): Promise<number> {
     buildMessenger: (t) =>
       new TelegramAdapter({
         token: t,
-        onError: (e) => {
-          logger.error("telegram.error", { error: e instanceof Error ? e.name : "unknown" });
+        onError: (e, fatal) => {
+          logger.error(fatal ? "telegram.polling_failed" : "telegram.error", {
+            error: e instanceof Error ? e.name : "unknown",
+          });
         },
       }),
     botUsername: username,
