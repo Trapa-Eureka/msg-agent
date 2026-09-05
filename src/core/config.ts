@@ -69,6 +69,15 @@ export const accessSchema = z.strictObject({
 });
 export type Access = z.output<typeof accessSchema>;
 
+export const DEFAULT_DOCS_PER_CHAT_PER_HOUR = 20;
+export const DEFAULT_DAILY_CHARS = 1_000_000;
+/** Rate and budget limits (R2) — counters live in memory, metadata only. */
+export const limitsSchema = z.strictObject({
+  docsPerChatPerHour: z.int().positive().default(DEFAULT_DOCS_PER_CHAT_PER_HOUR),
+  dailyChars: z.int().positive().default(DEFAULT_DAILY_CHARS),
+});
+export type Limits = z.output<typeof limitsSchema>;
+
 export const configSchema = z
   .strictObject({
     nativeLang: langCodeSchema,
@@ -85,6 +94,10 @@ export const configSchema = z
     inlineThresholdChars: z.int().positive().default(DEFAULT_INLINE_THRESHOLD_CHARS),
     maxChars: z.int().positive().default(DEFAULT_MAX_CHARS),
     access: accessSchema.default({ allowedChatIds: [] }),
+    limits: limitsSchema.default({
+      docsPerChatPerHour: DEFAULT_DOCS_PER_CHAT_PER_HOUR,
+      dailyChars: DEFAULT_DAILY_CHARS,
+    }),
   })
   .refine((c) => c.inlineThresholdChars <= c.maxChars, {
     message: "threshold_over_max",

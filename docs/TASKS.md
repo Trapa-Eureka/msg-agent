@@ -84,9 +84,10 @@
 - 완료 기준: [x] 미허용 사용자 문서 → 다운로드 0건 [x] 비소유자 `/mode` 무시 [x] 페어링·allow/deny e2e [x] check 통과
 - 결정 기록: config 루트·provider·messenger·access 모두 `strictObject`(알 수 없는 키 → invalid_value "unknown key") / 페어링 코드는 `start`가 crypto.randomInt로 생성·터미널 출력·1회 사용·프로세스 수명 / 거절은 `access.denied`(kind·chatId·userId) 경고 로그만 / FakeMessenger 이벤트의 기본 userId는 "owner"라 기존 테스트는 소유자 시나리오로 동작 / **기존 설정 파일은 페어링 전이므로 `start` 후 `/start <코드>` 필요**
 
-### R2 — 비용·속도 가드 · 상태: TODO · [02, 07, 15, SEC-02]
+### R2 — 비용·속도 가드 · 상태: DONE(2026-09-06) · [02, 07, 15, SEC-02]
 - 목표: 비용 가드를 전송 길이(공백 포함)로 계산, 문서당 최대 청크 수, 채팅별 시간당 문서 수·전역 일일 문자 예산(메모리, 메타만). Claude SDK `maxRetries: 0`(재시도는 파이프라인 1회만), OpenAI `max_completion_tokens`. 상한 초과 단일 자소는 코드포인트 분할로 길이 불변식 유지.
-- 완료 기준: [ ] 공백 우회 케이스 reject [ ] 529 목에서 청크당 요청 ≤ 2 [ ] 자소 4,201자 케이스 길이 ≤ 4,096 [ ] check 통과
+- 완료 기준: [x] 공백 우회 케이스 reject(399,400자 → rejectOverMax) [x] 529 목에서 청크당 요청 ≤ 2(SDK maxRetries 0 → 시도당 1회) [x] 자소 4,201자 케이스 길이 ≤ 4,096 [x] check 통과
+- 결정 기록: 비용 척도 = 정규화 텍스트 `length`(공백 포함) / `maxChunksPerDoc` 기본 50(파이프라인 옵션) / `limits`(strict) 기본 20건/시·1,000,000자/일, 재실행 명령도 건수에 포함, 요약 경로는 문자 2배 청구 / 상한 초과 안내는 `/summary` 제안 대신 파일 분할 안내(11번 해결) / OpenAI `max_completion_tokens` 16000 / 자소가 상한보다 길면 코드포인트 분할(길이 불변식 > 자소 무결성)
 
 ### R3 — 비밀값·설정 파일 안전 · 상태: TODO · [03, 12, SEC-04, SEC-05, SEC-06, SEC-07, SEC-13]
 - 목표: JSON 오류 원문 미출력(고정 코드), 원자적 저장(임시 600 → rename), 로드 시 심볼릭 링크·느슨한 권한 거절, `.env`는 허용 키 3개만 선택 로드, Claude SDK `logLevel: "off"` + 공식 baseURL 고정, `.gitignore`에 `.msg-agent/`.

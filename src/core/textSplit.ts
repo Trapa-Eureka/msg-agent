@@ -37,10 +37,32 @@ function packBy(
   return out;
 }
 
-function byGraphemes(text: string, limit: number): string[] {
+/** Last resort for a single grapheme longer than the limit (combining-mark bombs): split by code points. */
+export function byCodePoints(text: string, limit: number): string[] {
+  const out: string[] = [];
+  let buf = "";
+  for (const cp of text) {
+    if (buf.length + cp.length > limit && buf !== "") {
+      out.push(buf);
+      buf = "";
+    }
+    buf += cp;
+  }
+  if (buf !== "") out.push(buf);
+  return out;
+}
+
+/** Packs grapheme clusters up to `limit`; every returned part is guaranteed to be at most `limit` long. */
+export function byGraphemes(text: string, limit: number): string[] {
   const out: string[] = [];
   let buf = "";
   for (const { segment } of graphemes.segment(text)) {
+    if (segment.length > limit) {
+      if (buf !== "") out.push(buf);
+      buf = "";
+      out.push(...byCodePoints(segment, limit));
+      continue;
+    }
     if (buf.length + segment.length > limit && buf !== "") {
       out.push(buf);
       buf = "";

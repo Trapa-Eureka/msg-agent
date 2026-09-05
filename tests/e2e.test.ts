@@ -135,7 +135,7 @@ describe("SPEC §7 scenarios through the assembled daemon", () => {
     expect(t[0]).toContain('"scanned.pdf"에서 텍스트를 추출할 수 없습니다');
     expect(t[1]).toContain('"encrypted.pdf"은(는) 암호로 보호된 파일입니다');
     expect(t[2]).toContain('"sheet.xlsx"은(는) 지원하지 않는 형식입니다');
-    expect(t[3]).toMatch(/전문 번역 상한\(120000자\)을 넘습니다. 대신 \/summary/u);
+    expect(t[3]).toMatch(/처리 상한\(120000자\)을 넘습니다. 파일을 더 작게 나눠서/u);
     expect(translator.calls.chunks).toBe(0);
   });
 

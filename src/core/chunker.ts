@@ -1,5 +1,6 @@
 // Structure-preserving chunker + reassembly. DESIGN §3 step 5.
 // Split order: section -> paragraph -> sentence -> grapheme clusters (never inside a character).
+import { byGraphemes } from "./textSplit.js";
 import type { Chunk, ExtractedDoc, Section, TranslatedChunk } from "./types.js";
 
 export const DEFAULT_CHUNK_CHARS = 4000;
@@ -9,21 +10,7 @@ const PARAGRAPH = /\n\s*\n/u;
 // Sentence end: terminal punctuation (Latin/CJK/Arabic) followed by whitespace, or a line break.
 const SENTENCE_BOUNDARY = /(?<=[.!?؟]["'”’)]?)\s+|(?<=[。！？])|(?<=\n)/u;
 
-const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-
-function splitGraphemes(text: string, max: number): string[] {
-  const out: string[] = [];
-  let buf = "";
-  for (const { segment } of graphemes.segment(text)) {
-    if (buf.length + segment.length > max && buf !== "") {
-      out.push(buf);
-      buf = "";
-    }
-    buf += segment;
-  }
-  if (buf !== "") out.push(buf);
-  return out;
-}
+const splitGraphemes = (text: string, max: number): string[] => byGraphemes(text, max);
 
 /** Greedily packs `pieces` (joined by `sep`) into strings no longer than `max`; oversize pieces fall through to `fallback`. */
 function pack(

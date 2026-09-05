@@ -49,6 +49,7 @@ describe("configStore", () => {
       inlineThresholdChars: 3000,
       maxChars: 120000,
       access: { allowedChatIds: [] },
+      limits: { docsPerChatPerHour: 20, dailyChars: 1000000 },
     });
   });
 

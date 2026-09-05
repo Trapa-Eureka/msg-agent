@@ -20,6 +20,7 @@ const baseConfig: Config = {
   inlineThresholdChars: 3000,
   maxChars: 120_000,
   access: { ownerUserId: "owner", allowedChatIds: [] },
+  limits: { docsPerChatPerHour: 20, dailyChars: 1_000_000 },
 };
 const SIGNATURE = "ZQXJV-SIGNATURE-7731";
 const short: ExtractedDoc = syntheticDoc(2000);
@@ -54,6 +55,7 @@ function harness(
     chunkChars?: number;
     detectorLang?: string;
     pairingCode?: string;
+    maxChunksPerDoc?: number;
   } = {},
 ): Harness {
   const messenger = new FakeMessenger();
@@ -79,6 +81,7 @@ function harness(
     maxBytes: 20 * MB,
     ...(o.chunkChars === undefined ? {} : { chunkChars: o.chunkChars }),
     ...(o.pairingCode === undefined ? {} : { pairingCode: o.pairingCode }),
+    ...(o.maxChunksPerDoc === undefined ? {} : { maxChunksPerDoc: o.maxChunksPerDoc }),
   });
   pipeline.attach();
   return { pipeline, messenger, translator, settings, logger, extractor };
@@ -275,7 +278,7 @@ describe("policy and commands", () => {
 
     const over = harness({ config: { maxChars: 10_000 } });
     await upload(over, "c", "doc.txt");
-    expect(over.messenger.textsFor("c").at(-1)).toMatch(/^\[rejectOverMax ko \d+ 10000 true\]$/u);
+    expect(over.messenger.textsFor("c").at(-1)).toMatch(/^\[rejectOverMax ko \d+ 10000\]$/u);
     expect(over.translator.calls.chunks).toBe(0);
 
     const unsupported = harness();
@@ -377,7 +380,7 @@ describe("posting and privacy", () => {
   });
 
   it("cost guard: provider calls never exceed chunks + 1 summary", async () => {
-    const h = harness({ chunkChars: 600 });
+    const h = harness({ chunkChars: 600, maxChunksPerDoc: 500 });
     await upload(h, "c", "doc.txt");
     const chunks = new Set(h.translator.requestedChunks).size;
     expect(h.translator.calls.chunks).toBe(chunks);
@@ -389,7 +392,7 @@ describe("posting and privacy", () => {
 
 describe("concurrency", () => {
   it("processes two chats at once without mixing progress or results", async () => {
-    const h = harness({ chunkChars: 600 });
+    const h = harness({ chunkChars: 600, maxChunksPerDoc: 500 });
     await Promise.all([upload(h, "A", "doc.pdf"), upload(h, "B", "doc.txt")]);
     const a = h.messenger.textsFor("A");
     const b = h.messenger.textsFor("B");
@@ -489,5 +492,47 @@ describe("access control (R1)", () => {
     await h.messenger.emitCommand({ chatId: "grp", userId: "owner", name: "deny" });
     expect(h.settings.get().access.allowedChatIds).toEqual([]);
     expect(h.messenger.textsFor("grp").at(-1)).toBe("[chatDenied ko]");
+  });
+});
+
+describe("cost and rate guards (R2)", () => {
+  it("counts whitespace: the review's padding trick is rejected instead of producing 99 chunks", async () => {
+    const text = ("word" + " ".repeat(3990)).repeat(100); // 399,400 chars, 400 non-whitespace
+    const h = harness({ fixtures: { txt: { text, sections: [{ text }] } } });
+    await upload(h, "c", "pad.txt");
+    expect(h.messenger.textsFor("c").at(-1)).toMatch(/^\[rejectOverMax ko 399400 120000\]$/u);
+    expect(h.translator.calls.chunks).toBe(0);
+  });
+
+  it("rejects documents that would need more chunks than maxChunksPerDoc", async () => {
+    const h = harness({ chunkChars: 600, maxChunksPerDoc: 2 });
+    await upload(h, "c", "doc.pdf");
+    expect(h.messenger.textsFor("c").at(-1)).toMatch(/^\[rejectOverMax ko /u);
+    expect(h.translator.calls.chunks).toBe(0);
+    expect(h.logger.events()).toContain("doc.too_many_chunks");
+  });
+
+  it("limits documents and re-runs per chat per hour, silently counting rejected attempts too", async () => {
+    const h = harness({ config: { limits: { docsPerChatPerHour: 2, dailyChars: 1_000_000 } } });
+    await upload(h, "c", "doc.pdf");
+    await h.messenger.emitCommand({ chatId: "c", name: "full" });
+    await upload(h, "c", "doc.pdf");
+    const texts = h.messenger.textsFor("c");
+    expect(texts.at(-1)).toBe("[rateLimited ko 2]");
+    expect(h.messenger.downloads).toHaveLength(2);
+    // other chats are unaffected
+    await upload(h, "d", "doc.pdf");
+    expect(h.messenger.textsFor("d").at(-1)).toMatch(/^«KO:/u);
+  });
+
+  it("stops when the global daily character budget would be exceeded and charges summaries twice", async () => {
+    const h = harness({ config: { limits: { docsPerChatPerHour: 20, dailyChars: 5_000 } } });
+    await upload(h, "c", "doc.pdf"); // ~2,000 chars -> charged
+    const used = h.pipeline.dailyCharsUsed();
+    expect(used).toBeGreaterThan(1_500);
+    await upload(h, "c", "doc.txt"); // 30,000-char summary path -> exceeds
+    expect(h.messenger.textsFor("c").at(-1)).toBe("[dailyBudgetExhausted ko]");
+    expect(h.pipeline.dailyCharsUsed()).toBe(used); // no charge on rejection
+    expect(h.translator.calls.summarize).toBe(0);
   });
 });

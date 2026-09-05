@@ -26,18 +26,16 @@ describe("golden plans (TESTING §3, 7 cases)", () => {
   it("5. detected native language -> skip_same_lang", () => {
     expect(decidePlan({ ...base, sameLanguage: true })).toEqual({ kind: "skip_same_lang" });
   });
-  it("6. over maxChars -> reject with summary suggestion", () => {
+  it("6. over maxChars -> reject (no bypass, split-file guidance)", () => {
     expect(decidePlan({ ...base, charCount: 120_001 })).toEqual({
       kind: "reject",
       reason: "over_max_chars",
-      suggestSummary: true,
     });
   });
   it("7. unsupported format (.xlsx) -> reject", () => {
     expect(decidePlan({ ...base, supported: false })).toEqual({
       kind: "reject",
       reason: "unsupported_format",
-      suggestSummary: false,
     });
   });
 });
@@ -54,7 +52,6 @@ describe("edge policy", () => {
     expect(decidePlan({ ...base, sizeBytes: 21e6, maxBytes: 20e6, sameLanguage: true })).toEqual({
       kind: "reject",
       reason: "too_large_bytes",
-      suggestSummary: false,
     });
   });
   it("/full re-runs as file_full and still respects maxChars (guardrail 5)", () => {
@@ -65,15 +62,13 @@ describe("edge policy", () => {
     expect(decidePlan({ ...base, request: "full", charCount: 200_000 })).toEqual({
       kind: "reject",
       reason: "over_max_chars",
-      suggestSummary: true,
     });
   });
-  it("/summary yields summary_plus_file and does not suggest summary when already over max", () => {
+  it("/summary yields summary_plus_file and is rejected over max like everything else", () => {
     expect(decidePlan({ ...base, request: "summary" })).toEqual({ kind: "summary_plus_file" });
     expect(decidePlan({ ...base, request: "summary", charCount: 200_000 })).toEqual({
       kind: "reject",
       reason: "over_max_chars",
-      suggestSummary: false,
     });
   });
   it("classifies which plans need translation and summary calls", () => {

@@ -8,7 +8,6 @@ import type { PlanDecision, PlanRequest } from "./outputPlanner.js";
 import { decidePlan } from "./outputPlanner.js";
 import type { Phrases } from "./phrases.js";
 import type { Clock, Logger, SettingsStore } from "./ports.js";
-import { countChars } from "./sections.js";
 import type {
   Chunk,
   DocumentExtractor,
@@ -39,9 +38,13 @@ export interface PipelineDeps {
   supportedFormats?: readonly string[];
   /** One-time pairing code printed by `start` while no owner is configured (R1). */
   pairingCode?: string;
+  /** Documents producing more chunks than this are rejected (R2). */
+  maxChunksPerDoc?: number;
 }
 
 const DEFAULT_SUPPORTED = ["pdf", "docx", "txt", "md"] as const;
+const DEFAULT_MAX_CHUNKS_PER_DOC = 50;
+const HOUR_MS = 60 * 60 * 1000;
 const MAX_PROGRESS_UPDATES = 4;
 
 function outputFileName(fileName: string, lang: string): string {
@@ -128,6 +131,43 @@ export class Pipeline {
     this.deps.logger.warn("access.denied", { kind, chatId, userId: userId ?? "-" });
   }
 
+  // ---- rate and budget limits (R2): in-memory metadata counters ----
+
+  private readonly recentByChat = new Map<string, number[]>();
+  private dailyKey = "";
+  private dailyChars = 0;
+
+  /** Records one document/re-run for the chat; false when the hourly limit is exceeded. */
+  private takeChatSlot(chatId: string): boolean {
+    const now = this.deps.clock.now();
+    const recent = (this.recentByChat.get(chatId) ?? []).filter((t) => now - t < HOUR_MS);
+    const limit = this.deps.settings.get().limits.docsPerChatPerHour;
+    if (recent.length >= limit) {
+      this.recentByChat.set(chatId, recent);
+      return false;
+    }
+    recent.push(now);
+    this.recentByChat.set(chatId, recent);
+    return true;
+  }
+
+  /** Charges `chars` against today's global budget; false (and no charge) when it would exceed it. */
+  private chargeDaily(chars: number): boolean {
+    const key = new Date(this.deps.clock.now()).toISOString().slice(0, 10);
+    if (key !== this.dailyKey) {
+      this.dailyKey = key;
+      this.dailyChars = 0;
+    }
+    if (this.dailyChars + chars > this.deps.settings.get().limits.dailyChars) return false;
+    this.dailyChars += chars;
+    return true;
+  }
+
+  /** Test/introspection hook: today's charged characters. */
+  dailyCharsUsed(): number {
+    return this.dailyChars;
+  }
+
   private async guarded(chatId: string, work: () => Promise<void>): Promise<void> {
     try {
       await work();
@@ -173,6 +213,11 @@ export class Pipeline {
       return;
     }
     if (extractor === undefined) return; // unreachable: covered by preDecision
+    if (!this.takeChatSlot(chatId)) {
+      await this.post(chatId, phrases.rateLimited(config.limits.docsPerChatPerHour), messageId);
+      this.deps.logger.warn("doc.rate_limited", { ...log });
+      return;
+    }
 
     // 2. Download + extract
     await this.post(chatId, phrases.progressExtracting(fileName), messageId);
@@ -190,7 +235,7 @@ export class Pipeline {
       return;
     }
     const extractedDoc = extracted.value;
-    const chars = countChars(extractedDoc.text);
+    const chars = extractedDoc.text.length; // whitespace included — same measure as what is sent (R2)
     this.lastDoc.set(chatId, doc);
 
     // 3. Detect language
@@ -269,7 +314,7 @@ export class Pipeline {
       case "over_max_chars":
         return {
           kind: "reject",
-          reason: phrases.rejectOverMax(chars, config.maxChars, decision.suggestSummary),
+          reason: phrases.rejectOverMax(chars, config.maxChars),
         };
     }
   }
@@ -287,6 +332,17 @@ export class Pipeline {
   ): Promise<OutputPlan | undefined> {
     const chunks = chunkDocument(doc, this.chunkChars);
     const total = chunks.length;
+    if (total > (this.deps.maxChunksPerDoc ?? DEFAULT_MAX_CHUNKS_PER_DOC)) {
+      await this.post(chatId, phrases.rejectOverMax(doc.text.length, config.maxChars), messageId);
+      this.deps.logger.warn("doc.too_many_chunks", { chatId, fileName, chunks: total });
+      return undefined;
+    }
+    const charge = doc.text.length + (kind === "summary_plus_file" ? doc.text.length : 0);
+    if (!this.chargeDaily(charge)) {
+      await this.post(chatId, phrases.dailyBudgetExhausted(), messageId);
+      this.deps.logger.warn("doc.daily_budget", { chatId, fileName, chars: charge });
+      return undefined;
+    }
     const translated = [];
     const progressEvery = Math.max(1, Math.ceil(total / MAX_PROGRESS_UPDATES));
     if (total > 1) await this.post(chatId, phrases.progressTranslating(0, total));

@@ -6,7 +6,7 @@ export type RejectReason =
   | "unsupported_format"
   /** File larger than the messenger download limit; download was not attempted. */
   | "too_large_bytes"
-  /** Extracted text exceeds `maxChars` (guardrail 5) — suggest summary mode, never bypass. */
+  /** Extracted text (whitespace included) exceeds `maxChars` (guardrail 5) — ask to split the file, never bypass. */
   | "over_max_chars";
 
 export type PlanDecision =
@@ -14,7 +14,7 @@ export type PlanDecision =
   | { kind: "summary_plus_file" }
   | { kind: "file_full" }
   | { kind: "skip_same_lang" }
-  | { kind: "reject"; reason: RejectReason; suggestSummary: boolean };
+  | { kind: "reject"; reason: RejectReason };
 
 export type PlanRequest = "auto" | "full" | "summary";
 
@@ -38,19 +38,19 @@ export interface PlanInput {
 export function decidePlan(input: PlanInput): PlanDecision {
   const request = input.request ?? "auto";
   if (input.supported === false) {
-    return { kind: "reject", reason: "unsupported_format", suggestSummary: false };
+    return { kind: "reject", reason: "unsupported_format" };
   }
   if (
     input.sizeBytes !== undefined &&
     input.maxBytes !== undefined &&
     input.sizeBytes > input.maxBytes
   ) {
-    return { kind: "reject", reason: "too_large_bytes", suggestSummary: false };
+    return { kind: "reject", reason: "too_large_bytes" };
   }
   if (request === "auto" && input.sameLanguage) return { kind: "skip_same_lang" };
   if (input.charCount > input.maxChars) {
-    // Guardrail 5: an explicit /full does not bypass the cap.
-    return { kind: "reject", reason: "over_max_chars", suggestSummary: request !== "summary" };
+    // Guardrail 5: neither /full nor /summary bypasses the cap (summary needs the whole text too).
+    return { kind: "reject", reason: "over_max_chars" };
   }
   if (request === "summary") return { kind: "summary_plus_file" };
   if (request === "full") return { kind: "file_full" };
