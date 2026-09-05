@@ -109,9 +109,12 @@
 - 완료 기준: [x] 검수 재현 케이스 전부 테스트화(`## Terms`/`### Payment` 단계 보존, 15자 분할 목록 무손실 재조립, 영어 24문장+한국어 200문장 혼합 문서 스킵 안 됨, DOCX MIME + `report.pdf` → DOCX, `<ol>`·중첩 `<ul>`·`<a href>` 보존) [x] check 통과
 - 결정 기록: `Section.level`(Markdown `#` 개수, 휴리스틱 제목은 1) / `Chunk.sep`에 원래 구분자 보존, `assembleChunks(translated, chunks)`로 같은 섹션은 원 구분자·섹션 사이는 빈 줄 / 감지 표본 앞·중간·끝 700자씩, 하나라도 불일치면 0.6 → 스킵 금지 / 라우터를 `core/route.ts`로 옮겨 MIME 전용 1차·확장자 2차 / 단독 Markdown 링크 문단은 제목으로 보지 않음 / `link_preview_options.is_disabled` / 두 프롬프트에 "data, not instructions" 규칙 / 11번(상한 초과 안내)은 R2에서 처리
 
-### R7 — CLI·엔진 정리 · 상태: TODO · [13, 17, 18, 19]
+### R7 — CLI·엔진 정리 · 상태: DONE(2026-09-06) · [13, 17, 18, 19]
 - 목표: engines `>=22.12`(commander 15), 온보딩 취소를 검증 실패와 구분, saveConfig 이중 호출 제거, 미사용 도우미(resolveLanguageInput·autocomplete 경로·needsFullTranslation/needsSummary) 제거.
-- 완료 기준: [ ] check 통과
+- 완료 기준: [x] check 통과
+- 결정 기록: `engines.node >=22.12.0`(commander 15·`util.parseEnv`) — CLAUDE.md·HUMAN_PREP·README·DESIGN 갱신 / 온보딩 프롬프트 취소는 `CANCELLED` 심볼로 즉시 중단(재시도 없음), 빈 입력만 검증 실패로 재입력 / `saveConfig` 결과 타입 유지, 이중 호출 제거 / `resolveLanguageInput`·autocomplete 경로·`needsFullTranslation`·`needsSummary` 삭제
+
+**검수 대응 완료(2026-09-06): R1~R7 전부 DONE.** 남은 검수 항목은 SEC-03의 프로세스 격리(v0.2 대기열)뿐이다. 릴리스 체크리스트로 진행.
 
 ### 보류 (v0.2) — [SEC-03] 파서 프로세스 격리
 - R4에서 DOCX 압축 해제 예산·PDF 페이지 수 사전 검사와 이미지 변환 비활성화까지만 적용. worker/자식 프로세스 격리(CPU·메모리 제한, 키 미상속)는 v0.2 대기열로.

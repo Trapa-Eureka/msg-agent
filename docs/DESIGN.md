@@ -131,7 +131,7 @@ zod 스키마로 로드 검증. CLI `status`는 설정 요약 + 봇 연결 상�
 
 | 형태 | 의미 | 비고 |
 |---|---|---|
-| `env:<VAR>` | 환경변수 `<VAR>`에서 읽는다 (권장) | `<VAR>`는 `[A-Z_][A-Z0-9_]*`. 셸 환경 또는 CWD의 `.env`(`process.loadEnvFile`, 의존성 없음) |
+| `env:<VAR>` | 환경변수 `<VAR>`에서 읽는다 (권장) | `<VAR>`는 `[A-Z_][A-Z0-9_]*`. 셸 환경 또는 CWD의 `.env`(`util.parseEnv`로 허용 키만 선택 로드, 의존성 없음, Node 22.12+) |
 | `literal:<value>` | 값을 config.json에 직접 저장 | 파일 권한 600 전제. `init`이 사용자가 키를 붙여넣고 env 저장을 거부했을 때 사용 |
 
 - 해석(`resolveSecret`)은 configStore가 담당하며, 해석 실패(env 미설정·빈 값·접두사 없음)는 원인 + 수정 방법("`.env`에 `ANTHROPIC_API_KEY=`를 추가하거나 `init`을 다시 실행")을 담은 오류로 반환한다.

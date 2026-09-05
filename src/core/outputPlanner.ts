@@ -1,5 +1,5 @@
 // Output planning policy — SPEC §4 / TESTING §3 golden plans. Pure decision, no content.
-import type { OutputMode, OutputPlanKind } from "./types.js";
+import type { OutputMode } from "./types.js";
 
 export type RejectReason =
   /** No extractor for this MIME/extension (SPEC §5 formats). */
@@ -64,14 +64,4 @@ export function decidePlan(input: PlanInput): PlanDecision {
     case "smart":
       return long ? { kind: "summary_plus_file" } : { kind: "inline_full" };
   }
-}
-
-/** Plan kinds that require a full translation (all chunks). */
-export function needsFullTranslation(kind: OutputPlanKind): boolean {
-  return kind === "inline_full" || kind === "summary_plus_file" || kind === "file_full";
-}
-
-/** Plan kinds that require a summary call. */
-export function needsSummary(kind: OutputPlanKind): boolean {
-  return kind === "summary_plus_file";
 }

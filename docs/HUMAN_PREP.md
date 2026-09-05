@@ -16,7 +16,7 @@
 - [x] **LICENSE 선택** — 현재 라이선스 파일 없음. npm 공개 시 필수이므로 MIT 등 미리 결정.
       MIT 라이선스를 사용한다.
       → 2026-09-05 완료: 루트에 `LICENSE`(MIT, Copyright (c) 2026 Trapa-Eureka) 추가. T0의 `package.json`에 `"license": "MIT"` 기입 필요.
-- [x] **Node 버전 확인** — 요구사항 Node 20+. 2026-09-05 기준 v24.12.0 / npm 11.6.2 확인 완료.
+- [x] **Node 버전 확인** — 요구사항 Node 22.12+ (R7에서 상향: commander 15가 22.12 이상 요구). 2026-09-05 기준 v24.12.0 / npm 11.6.2 확인 완료.
 
 ## 2. T7(CLI 온보딩)·T11(스모크) 전
 

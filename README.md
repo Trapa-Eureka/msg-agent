@@ -29,6 +29,7 @@
 ## 퀵스타트
 
 ```bash
+# Node.js 22.12 이상
 npm install
 npm run cli -- init    # 온보딩 3문항: 모국어 / 프로바이더+API 키 / Telegram 봇 토큰 (즉시 검증)
 npm run cli -- start   # 데몬 시작 — 터미널의 6자리 코드를 봇에게 `/start <코드>`로 보내 소유자 등록(최초 1회)
