@@ -7,12 +7,15 @@
 
 ## 1. T0 착수 전 (지금)
 
-- [ ] **저장소 정리** — `.DS_Store`가 첫 커밋에 포함되어 있다. T0의 `.gitignore`에 추가 후 `git rm --cached .DS_Store`로 추적 해제.
+- [x] **저장소 정리** — `.DS_Store`가 첫 커밋에 포함되어 있다. T0의 `.gitignore`에 추가 후 `git rm --cached .DS_Store`로 추적 해제.
       .gitignore 추가 하고 git rm --cached .DS_Store 실행한다.
+      → 2026-09-05 완료: `.gitignore`(OS·node_modules·dist·coverage·.env) 추가, `.DS_Store` 추적 해제.
 - [x] **저장소 공개 여부 결정** — npm 공개 전까지 비공개 전환 가능(CI·배지·외부 연동 없음, 스타·포크 0). 비공개여도 가드레일 4(키·토큰 커밋 금지)는 그대로 적용.
       일단 비공개로 설정되어있다.
-- [ ] **LICENSE 선택** — 현재 라이선스 파일 없음. npm 공개 시 필수이므로 MIT 등 미리 결정.
+      → 2026-09-05 `gh repo view`로 PRIVATE 확인.
+- [x] **LICENSE 선택** — 현재 라이선스 파일 없음. npm 공개 시 필수이므로 MIT 등 미리 결정.
       MIT 라이선스를 사용한다.
+      → 2026-09-05 완료: 루트에 `LICENSE`(MIT, Copyright (c) 2026 Trapa-Eureka) 추가. T0의 `package.json`에 `"license": "MIT"` 기입 필요.
 - [x] **Node 버전 확인** — 요구사항 Node 20+. 2026-09-05 기준 v24.12.0 / npm 11.6.2 확인 완료.
 
 ## 2. T7(CLI 온보딩)·T11(스모크) 전

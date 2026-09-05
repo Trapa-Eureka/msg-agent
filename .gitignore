@@ -1,0 +1,19 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+
+# Secrets — 가드레일 4: 키·토큰은 .env와 ~/.message/config.json(600)에만
+.env
+.env.*
+!.env.example
+
+# Editors
+.vscode/
+.idea/
