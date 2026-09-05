@@ -86,7 +86,7 @@ export type OutputPlan =
 ## 5. 프로바이더 메모
 
 - ClaudeProvider(기본)·OpenAIProvider — 공통: 청크별 번역 프롬프트(용어·수치·고유명사 보존 지시, 출력은 번역문만), 요약 프롬프트(제목·핵심 조항·수치·요청사항 구조). 프롬프트 텍스트는 `core/prompts.ts` 한 곳에만 둔다. 청크는 순차 호출(진행 n/m 콜백), 청크 재시도는 파이프라인(T6) 책임이며 프로바이더는 `ProviderError`(retryable 플래그)를 던진다.
-- Claude: 공식 SDK(`@anthropic-ai/sdk`)에 `fetch`를 주입해 테스트에서는 목 fetch로 요청 형태를 검증한다. 기본 모델 `claude-opus-5`(config `provider.model`로 변경), 번역은 `output_config.effort: "low"`, 요약은 `"medium"`, 안전 거절 시 서버측 fallbacks(`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`) 적용, `stop_reason: "refusal"`이면 `refusal` 오류. 키 검증은 `GET /v1/models/{model}`.
+- Claude: 공식 SDK(`@anthropic-ai/sdk`)에 `fetch`를 주입해 테스트에서는 목 fetch로 요청 형태를 검증한다. 기본 모델 `claude-sonnet-5`(config `provider.model`로 변경), 번역은 `output_config.effort: "low"`, 요약은 `"medium"`, 안전 거절 시 서버측 fallbacks(`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`) 적용, `stop_reason: "refusal"`이면 `refusal` 오류. 키 검증은 `GET /v1/models/{model}`.
 - OpenAI: Chat Completions(`/v1/chat/completions`) raw fetch, 기본 모델 `gpt-5`(config로 변경), 키 검증은 `GET /v1/models/{model}`. 401→auth, 429→rate_limit(재시도 가능), 5xx→server(재시도 가능).
 - 온보딩 `init`에서 키 검증 1회 호출. 실패 시 수정 방법 담긴 안내.
 - 토큰 상한(config `maxChars`) 초과 문서는 planner가 요약 모드 강제 제안 → 사용자가 `/full`로 명시 요청해도 상한 초과면 거절 사유 안내 (가드레일 5).
