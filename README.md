@@ -31,7 +31,7 @@
 ```bash
 npm install
 npm run cli -- init    # 온보딩 3문항: 모국어 / 프로바이더+API 키 / Telegram 봇 토큰 (즉시 검증)
-npm run cli -- start   # long polling 데몬 — 이후 봇에게 문서를 보내면 같은 대화창에 번역이 올라온다
+npm run cli -- start   # 데몬 시작 — 터미널의 6자리 코드를 봇에게 `/start <코드>`로 보내 소유자 등록(최초 1회)
 ```
 
 `npm run cli -- status`는 설정 요약(키·토큰은 가려서)과 봇 연결 상태를 보여준다. 키·토큰은 `.env`(`ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/`TELEGRAM_BOT_TOKEN`) 또는 `~/.msg-agent/config.json`(권한 600)에만 저장된다.
@@ -45,6 +45,10 @@ npm run cli -- start   # long polling 데몬 — 이후 봇에게 문서를 보�
 | `/summary` | 마지막 문서 요약 다시 (+ 파일) |
 | `/mode smart\|full\|summary` | 기본 출력 모드 변경 |
 | `/lang <코드>` | 모국어 변경 (예: `/lang ko`) |
+| `/start <코드>` | 페어링: 터미널에 표시된 코드로 소유자 등록 (최초 1회) |
+| `/allow` · `/deny` | (소유자) 현재 대화방 허용 / 해제 |
+
+봇은 페어링된 소유자와 허용된 대화방의 문서만 처리한다. 그 외 사용자의 문서·명령은 응답 없이 무시된다.
 
 ### 검증
 

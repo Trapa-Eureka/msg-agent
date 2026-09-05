@@ -23,10 +23,10 @@ adapters/telegramAdapter (grammY) ──────► core/pipeline.ts
 
 ```ts
 export interface IncomingDoc {
-  chatId: string; messageId: string; fileName: string; mime: string;
-  sizeBytes: number; download(): Promise<Uint8Array>;
+  chatId: string; messageId: string; userId?: string;               // userId = 발신자(채널 게시 등 없으면 undefined)
+  fileName: string; mime: string; sizeBytes: number; download(): Promise<Uint8Array>;
 }
-export interface IncomingCommand { chatId: string; name: "full"|"summary"|"mode"|"lang"; arg?: string }
+export interface IncomingCommand { chatId: string; userId?: string; name: "start"|"full"|"summary"|"mode"|"lang"|"allow"|"deny"; arg?: string }
 
 export interface MessengerAdapter {
   onDocument(h: (d: IncomingDoc) => Promise<void>): void;
@@ -110,9 +110,12 @@ export type OutputPlan =
   "nativeLang": "ko",
   "provider": { "kind": "claude", "apiKeyRef": "env:ANTHROPIC_API_KEY" },
   "messenger": { "kind": "telegram", "tokenRef": "literal:123456:ABC..." },
-  "mode": "smart", "inlineThresholdChars": 3000, "maxChars": 120000
+  "mode": "smart", "inlineThresholdChars": 3000, "maxChars": 120000,
+  "access": { "ownerUserId": "123456789", "allowedChatIds": ["123456789", "-1001234567890"] }
 }
 ```
+
+**접근 제어(`access`, R1)** — 기본 거절. `ownerUserId`는 페어링으로만 설정되고(`/start <코드>`, 코드는 `start`가 터미널에 출력·프로세스 수명 동안 유효·1회 사용), `allowedChatIds`는 페어링 채팅 + 소유자의 `/allow`. 판정: 문서·`/full`·`/summary` = `chatId ∈ allowedChatIds || userId === ownerUserId`; `/mode`·`/lang`·`/allow`·`/deny` = 소유자만. 거절은 응답 없이 `access.denied`(chatId·userId·종류) 로그. 스키마는 strict — 알 수 없는 키는 오류(잘못된 보호 설정 조기 발견).
 
 zod 스키마로 로드 검증. CLI `status`는 설정 요약 + 봇 연결 상태 출력.
 

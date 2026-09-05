@@ -112,6 +112,7 @@ async function runScenario(translator: FakeTranslator): Promise<void> {
       nativeLang: "ko",
       provider: { kind: "claude", apiKeyRef: "literal:k" },
       messenger: { kind: "telegram", tokenRef: "literal:t" },
+      access: { ownerUserId: "owner", allowedChatIds: [] },
     },
     configPath,
   );

@@ -41,6 +41,9 @@ export async function runStatus(d: StatusDeps): Promise<number> {
   d.out(
     `mode: ${c.mode}, inlineThresholdChars: ${String(c.inlineThresholdChars)}, maxChars: ${String(c.maxChars)}`,
   );
+  d.out(
+    `access: owner ${c.access.ownerUserId === undefined ? "(not paired)" : "set"}, allowed chats ${String(c.access.allowedChatIds.length)}`,
+  );
 
   const token = resolveSecret(c.messenger.tokenRef, "messenger.tokenRef", d.env);
   if (!token.ok) {

@@ -24,6 +24,10 @@ export interface Phrases {
   langChanged(langCode: string): string;
   langInvalid(arg: string | undefined): string;
   unknownError(): string;
+  /** Pairing succeeded: owner registered and this chat allowed. */
+  paired(): string;
+  chatAllowed(): string;
+  chatDenied(): string;
 }
 
 export type PhraseKey = keyof Phrases;

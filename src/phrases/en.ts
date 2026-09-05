@@ -33,6 +33,10 @@ export const en = {
   langChanged: (c) => `Native language set to ${name(c)}.`,
   langInvalid: (a) =>
     `Unknown language "${a ?? ""}". Use an ISO 639 code such as ko, en, ja, fil. Example: /lang ko`,
+  paired: () =>
+    "Paired. You are the owner and this chat is allowed. Send a PDF, DOCX or TXT/MD to translate it.",
+  chatAllowed: () => "This chat is now allowed to submit documents.",
+  chatDenied: () => "This chat is no longer allowed to submit documents.",
   unknownError: () =>
     "Something went wrong while processing the document. Please try again; if it keeps failing, restart the bot (npm run cli -- start).",
 } satisfies Phrases;

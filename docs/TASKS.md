@@ -79,9 +79,10 @@
 
 릴리스 전에 처리한다. 한 세션 = 한 R 태스크, 완료 시 `npm run check` + PR 머지. 번호는 검수 문서의 항목 번호.
 
-### R1 — 접근 제어 · 상태: TODO · [01, SEC-01, SEC-12 일부]
+### R1 — 접근 제어 · 상태: DONE(2026-09-06) · [01, SEC-01, SEC-12 일부]
 - 목표: 소유자·허용 채팅 기반 기본 거절. 이벤트에 발신자 `userId` 추가. 페어링: `start` 시 터미널에 6자리 코드 출력 → 소유자가 봇에 `/start <코드>` → 소유자 등록 + 그 채팅 허용. 소유자 명령 `/allow`(현재 채팅 허용)·`/deny`. 문서·`/full`·`/summary`는 허용 채팅 또는 소유자만, `/mode`·`/lang`은 소유자만. 거절은 조용히(로그 메타만). config `access` 스키마(strict, 알 수 없는 키 거절).
-- 완료 기준: [ ] 미허용 사용자 문서 → 다운로드 0건 [ ] 비소유자 `/mode` 무시 [ ] 페어링·allow/deny e2e [ ] check 통과
+- 완료 기준: [x] 미허용 사용자 문서 → 다운로드 0건 [x] 비소유자 `/mode` 무시 [x] 페어링·allow/deny e2e [x] check 통과
+- 결정 기록: config 루트·provider·messenger·access 모두 `strictObject`(알 수 없는 키 → invalid_value "unknown key") / 페어링 코드는 `start`가 crypto.randomInt로 생성·터미널 출력·1회 사용·프로세스 수명 / 거절은 `access.denied`(kind·chatId·userId) 경고 로그만 / FakeMessenger 이벤트의 기본 userId는 "owner"라 기존 테스트는 소유자 시나리오로 동작 / **기존 설정 파일은 페어링 전이므로 `start` 후 `/start <코드>` 필요**
 
 ### R2 — 비용·속도 가드 · 상태: TODO · [02, 07, 15, SEC-02]
 - 목표: 비용 가드를 전송 길이(공백 포함)로 계산, 문서당 최대 청크 수, 채팅별 시간당 문서 수·전역 일일 문자 예산(메모리, 메타만). Claude SDK `maxRetries: 0`(재시도는 파이프라인 1회만), OpenAI `max_completion_tokens`. 상한 초과 단일 자소는 코드포인트 분할로 길이 불변식 유지.

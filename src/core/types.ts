@@ -1,12 +1,14 @@
 // Core interfaces — DESIGN §2. The core knows nothing about grammY, pdf-parse, or any provider SDK.
 import type { Result } from "./result.js";
 
-export type CommandName = "full" | "summary" | "mode" | "lang";
+export type CommandName = "start" | "full" | "summary" | "mode" | "lang" | "allow" | "deny";
 export type OutputMode = "smart" | "full" | "summary";
 
 export interface IncomingDoc {
   chatId: string;
   messageId: string;
+  /** Sender user id; undefined for anonymous/channel posts (treated as not the owner). */
+  userId?: string;
   fileName: string;
   mime: string;
   sizeBytes: number;
@@ -15,6 +17,7 @@ export interface IncomingDoc {
 
 export interface IncomingCommand {
   chatId: string;
+  userId?: string;
   name: CommandName;
   arg?: string;
 }

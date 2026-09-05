@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { saveConfig } from "../src/adapters/configStore.js";
-import type { Config } from "../src/core/index.js";
+import type { Config, ConfigInput } from "../src/core/index.js";
 import type { Asker, Question, VerifyResult } from "../src/cli/init.js";
 import { languageChoices, resolveLanguageInput, runInit } from "../src/cli/init.js";
 import { runStart } from "../src/cli/start.js";
@@ -159,11 +159,12 @@ describe("init", () => {
   });
 });
 
-const config = {
+const config: ConfigInput = {
   nativeLang: "ko",
   provider: { kind: "claude", apiKeyRef: "env:ANTHROPIC_API_KEY" },
   messenger: { kind: "telegram", tokenRef: "literal:123:abc" },
-} as const;
+  access: { ownerUserId: "owner", allowedChatIds: [] },
+};
 
 function startDeps(env: Record<string, string>) {
   const messenger = new FakeMessenger();

@@ -61,21 +61,30 @@ const langCodeSchema = z.string().transform((value, ctx) => {
   return info.code;
 });
 
+export const accessSchema = z.strictObject({
+  /** Telegram user id of the owner — set only by pairing (/start <code>). */
+  ownerUserId: z.string().min(1).optional(),
+  /** Chats allowed to submit documents; the pairing chat plus owner /allow. */
+  allowedChatIds: z.array(z.string().min(1)).default([]),
+});
+export type Access = z.output<typeof accessSchema>;
+
 export const configSchema = z
-  .object({
+  .strictObject({
     nativeLang: langCodeSchema,
-    provider: z.object({
+    provider: z.strictObject({
       kind: z.enum(PROVIDER_KINDS),
       apiKeyRef: secretRefSchema,
       model: z.string().min(1).optional(),
     }),
-    messenger: z.object({
+    messenger: z.strictObject({
       kind: z.enum(MESSENGER_KINDS),
       tokenRef: secretRefSchema,
     }),
     mode: z.enum(OUTPUT_MODES).default("smart"),
     inlineThresholdChars: z.int().positive().default(DEFAULT_INLINE_THRESHOLD_CHARS),
     maxChars: z.int().positive().default(DEFAULT_MAX_CHARS),
+    access: accessSchema.default({ allowedChatIds: [] }),
   })
   .refine((c) => c.inlineThresholdChars <= c.maxChars, {
     message: "threshold_over_max",
@@ -110,6 +119,9 @@ function classify(issue: z.core.$ZodIssue): ConfigIssue {
   const leaf = issue.path[issue.path.length - 1];
   if (issue.code === "invalid_type" && issue.input === undefined) {
     return { code: "missing_field", path };
+  }
+  if (issue.code === "unrecognized_keys") {
+    return { code: "invalid_value", path, detail: `unknown key: ${issue.keys.join(", ")}` };
   }
   if (issue.message === "invalid_lang") {
     return { code: "invalid_lang", path, detail: String(issue.input) };
