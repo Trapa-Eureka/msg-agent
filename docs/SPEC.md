@@ -1,72 +1,73 @@
-# SPEC — message v0.1
+# SPEC — msg-agent v0.1
 
-작성: 2026-09-04 · 상태: 확정 (변경 시 이 문서를 먼저 수정)
+Written: 2026-09-04 · Status: final (edit this document first when anything changes)
 
-## 1. 배경
+## 1. Background
 
-원격 협업에서 외국어 문서(계약서, 매뉴얼, 공지, 견적)가 메신저로 날아오는 일은 일상이다. 받을 때마다 파일을 내려받아 번역기에 붙여넣는 마찰을 없앤다: **문서가 대화창에 올라오는 순간, 모국어 버전이 같은 대화창에 따라 올라온다.** 개인이 npm으로 설치해 자기 API 키로 돌리는 셀프호스트 에이전트다(서버·가입 없음).
+In remote collaboration, foreign-language documents (contracts, manuals, notices, quotes) arrive through messengers every day. This removes the friction of downloading each file and pasting it into a translator: **the moment a document appears in a chat, a native-language version follows in the same chat.** It is a self-hosted agent that an individual installs from npm and runs with their own API key (no server, no sign-up).
 
-## 2. 첫 메신저 결정: Telegram (근거 기록)
+## 2. First messenger decision: Telegram (rationale)
 
-| 후보 | 판정 | 근거 |
+| Candidate | Verdict | Rationale |
 |---|---|---|
-| **Telegram** | **v0.1 채택** | long polling(getUpdates)이라 공개 URL·서버 불필요 → 노트북에서 즉시 구동. @BotFather로 무심사 토큰 발급. getFile로 봇 다운로드 20MB까지 — 문서 용도에 충분 |
-| Slack | v0.2 | Socket Mode로 공개 URL 없이 가능하나 앱 생성·스코프 설정 단계가 김 |
-| Viber | v0.3 | 필리핀 시장 가치 큼. 단 웹훅 필수 → 터널/배포 필요해 개인 온보딩 난도 상승 |
-| Discord | 이후 | Gateway 봇 무난, 문서 업무 사용률 낮아 후순위 |
-| WhatsApp | 이후 | Business Cloud API — Meta 사업자 인증·전화번호·웹훅. 개인용 최난도 |
-| Teams | 이후 | Azure 봇 등록 — 엔터프라이즈 절차 |
+| **Telegram** | **adopted for v0.1** | Long polling (getUpdates) needs no public URL or server → runs on a laptop immediately. @BotFather issues tokens without review. getFile downloads up to 20 MB — enough for documents |
+| Slack | v0.2 | Socket Mode works without a public URL, but app creation and scope setup are long |
+| Viber | v0.3 | High value in the Philippine market, but webhooks are mandatory → tunnel/deployment raises onboarding difficulty |
+| Discord | later | Gateway bots are fine; low usage for document work |
+| WhatsApp | later | Business Cloud API — Meta business verification, phone number, webhooks. Hardest for personal use |
+| Teams | later | Azure bot registration — enterprise procedure |
 
-아키텍처 요구: 위 순서로 추가하되 코어 수정 없이 `MessengerAdapter` 구현 1개로 끝나야 한다.
+Architecture requirement: add messengers in this order, each as a single `MessengerAdapter` implementation with no core changes.
 
-## 3. 온보딩 (CLI `init`)
+## 3. Onboarding (CLI `init`)
 
-1. **모국어 선택** — 10개 고정 목록에서 선택: 한국어·영어·스페인어·프랑스어·독일어·일본어·중국어·이탈리아어·러시아어·라틴어 (2026-09-05 Jin 결정: 전체 언어 자동완성은 고르기 어려워 축소). 그 외 언어는 채팅 `/lang <ISO 639 코드>`로 설정 가능. 안내 문구 팩은 ko·en만 있고 나머지는 영어 문구로 폴백(번역 자체는 모든 언어 지원).
-2. **AI 프로바이더** — Claude(기본)/OpenAI 선택 + API 키 입력 → 즉시 1회 검증 호출로 키 확인.
-3. **메신저** — v0.1은 Telegram 고정: BotFather 토큰 붙여넣기 → 검증 → "봇을 원하는 대화방에 초대하세요" 안내.
+1. **Native language** — pick from a fixed list of ten: Korean, English, Spanish, French, German, Japanese, Chinese, Italian, Russian, Latin (decided by Jin on 2026-09-05: the full-language autocomplete was too hard to pick from). Other languages can be set from the chat with `/lang <ISO 639 code>`. Phrase packs exist for ko and en only; other languages fall back to English messages (translation itself supports every language).
+2. **AI provider** — choose Claude (default) or OpenAI and enter the API key → verified immediately with one call.
+3. **Messenger** — fixed to Telegram in v0.1: paste the BotFather token → verify → "invite the bot to the chat you want".
 
-설정은 `~/.msg-agent/config.json`(권한 600)에 저장. `start`로 데몬 시작.
-4. **페어링(접근 제어, R1)** — 봇은 기본적으로 아무도 받지 않는다. `start` 실행 시 터미널에 6자리 페어링 코드가 뜨고, 소유자가 봇에게 `/start <코드>`를 보내면 소유자로 등록되며 그 대화방이 허용된다. 소유자는 다른 대화방(그룹)에서 `/allow`로 허용, `/deny`로 해제한다. 문서·`/full`·`/summary`는 허용된 대화방 또는 소유자만, `/mode`·`/lang`·`/allow`·`/deny`는 소유자만 처리하고 그 외는 조용히 무시한다(로그에 메타만).
+Config is stored in `~/.msg-agent/config.json` (mode 600). `start` launches the daemon.
 
-## 4. 출력 모드 결정: 전문 vs 요약 (질문에 대한 결론)
+4. **Pairing (access control, R1)** — the bot accepts nobody by default. `start` prints a six-digit pairing code in the terminal; when the owner sends `/start <code>` to the bot, they are registered as owner and that chat is allowed. The owner allows other chats (groups) with `/allow` and revokes with `/deny`. Documents, `/full` and `/summary` are processed only for allowed chats or the owner; `/mode`, `/lang`, `/allow`, `/deny` are owner-only; everything else is ignored silently (metadata-only log).
 
-**결론 = 스마트 모드 기본.** 전문·요약 중 하나를 고르는 문제가 아니라 문서 길이에 따라 갈리는 문제다:
+## 4. Output-mode decision: full text vs summary
 
-- **짧은 문서(임계치 이하, 기본 ~3,000자 추출 텍스트)** → 채팅에 전문 번역 (메신저 글자 제한에 맞춰 분할 게시. Telegram은 메시지당 4,096자).
-- **긴 문서(임계치 초과)** → 채팅에는 **모국어 구조 요약**(제목·핵심 조항·수치·요청사항) + **전문 번역을 .md 파일로 첨부**. 채팅창을 전문으로 도배하면 대화가 죽고, 요약만 주면 정보가 부족하다 — 요약은 훑고 전문은 파일로 여는 게 메신저 UX에 맞다.
-- 명령: `/full`(이 문서 전문을 파일로), `/summary`(요약 다시), `/mode full|summary|smart`(기본 모드 변경), `/lang <언어>`(모국어 변경).
-- **같은 언어 문서는 스킵**: 감지 언어 = 모국어면 "이미 {언어} 문서입니다" 한 줄만.
-- 일부분 번역(사용자가 범위 지정)은 메신저 UI로 범위를 지정할 방법이 마땅치 않아 v0.1 제외 — `/full` 요청형으로 갈음, 페이지 지정(`/pages 3-5`)은 v0.2 검토.
+**Conclusion = smart mode by default.** It is not a choice between full text and summary; it depends on document length:
 
-## 5. v0.1 범위
+- **Short document (at or below the threshold, default ~3,000 characters of extracted text)** → full translation in the chat (split to the messenger's message limit; Telegram allows 4,096 characters per message).
+- **Long document (above the threshold)** → a **structured native-language summary** in the chat (title, key clauses, figures, requests) **plus the full translation attached as a .md file**. Flooding the chat with full text kills the conversation; a summary alone loses information — skim the summary, open the file for the full text. That fits messenger UX.
+- Commands: `/full` (this document's full text as a file), `/summary` (summarize again), `/mode full|summary|smart` (change the default mode), `/lang <language>` (change the native language).
+- **Same-language documents are skipped**: if the detected language equals the native language, reply with one line: "This document is already in {language}."
+- Partial translation (user-selected range) is out of scope for v0.1 because messenger UIs offer no good way to select a range — `/full` covers the request form; page selection (`/pages 3-5`) is a v0.2 candidate.
 
-- 형식: 텍스트형 PDF, DOCX, TXT/MD. 원어는 전체 언어(감지 자동).
-- Telegram 어댑터(long polling), 1:1 대화 + 봇이 초대된 그룹.
-- 스마트 모드 + 명령 4종. 진행 상태 메시지("번역 중… n/m").
-- 비용 가드(R2): 파일 ≤ 20MB(Telegram 한도), **추출 텍스트 길이(공백 포함, 실제 전송 문자열 기준)** 상한 `maxChars`(기본 120,000) 초과 시 거절 + 파일 분할 안내, 문서당 청크 수 상한, 채팅별 시간당 문서 수(`limits.docsPerChatPerHour`, 기본 20, 재실행 명령 포함), 전역 일일 문자 예산(`limits.dailyChars`, 기본 1,000,000). 모두 메타데이터만 메모리에 기록(가드레일 1).
+## 5. v0.1 scope
 
-## 6. v0.1 비목표
+- Formats: text-layer PDF, DOCX, TXT/MD. Any source language (auto-detected).
+- Telegram adapter (long polling), 1:1 chats and groups the bot is invited to.
+- Smart mode + four commands. Progress messages ("Translating… n/m").
+- Cost guards (R2): file ≤ 20 MB (Telegram limit); **extracted text length (whitespace included, the same measure as the strings actually sent)** capped by `maxChars` (default 120,000) — above it, refuse and ask to split the file; a per-document chunk cap; per-chat documents per hour (`limits.docsPerChatPerHour`, default 20, re-run commands included); a global daily character budget (`limits.dailyChars`, default 1,000,000). All counters are metadata kept in memory (guardrail 1).
 
-- 스캔 PDF·이미지 OCR — v0.2 / 서식 보존 DOCX 출력(번역문을 원 레이아웃에) — v0.3
-- MCP 서버(`translate_document` 도구로 코어 노출) — v0.2
-- Slack·Viber 등 추가 메신저, 용어집(glossary), 다중 사용자 서버 모드, 음성·영상 자막
+## 6. v0.1 non-goals
 
-## 7. 성공 기준 (v0.1 완료 판정)
+- Scanned PDF / image OCR — v0.2. Layout-preserving DOCX output (translation in the original layout) — v0.3.
+- MCP server (expose the core as a `translate_document` tool) — v0.2.
+- Additional messengers (Slack, Viber, …), glossaries, multi-user server mode, audio/video subtitles.
 
-- [x] e2e-mock: 업로드→감지→번역→게시(짧은 문서 전문 / 긴 문서 요약+파일 / 같은 언어 스킵 / 명령 4종) 전부 통과. — T9 `tests/e2e.test.ts`
-- [x] 실스모크: 실제 Telegram 봇으로 영어 PDF 1건 → 한국어 요약+파일 수신 확인. — 2026-09-05, @docu_translate_bot, 4,755자 PDF, 55.6초, 체크리스트 전부 ✓ (TESTING §5)
-- [x] 문서 내용이 로그·디스크에 잔류하지 않음을 테스트로 증명. — T10 `tests/privacy-audit.test.ts`
-- [x] `npm run check` 통과, `src/core/` 커버리지 90% 이상. — 178 테스트, core 97% (`docs/COVERAGE.md`)
+## 7. Success criteria (v0.1 done)
 
-**v0.1 완료 판정: 충족 (2026-09-05).** 남은 것은 공개 절차(TASKS.md 릴리스 체크리스트).
+- [x] e2e-mock: upload → detect → translate → post (short document full text / long document summary + file / same-language skip / four commands) all pass. — T9 `tests/e2e.test.ts`
+- [x] Real smoke: one English PDF through a real Telegram bot → Korean summary + file received. — 2026-09-05, @docu_translate_bot, 4,755-char PDF, 55.6 s, every checklist item ✓ (TESTING §5)
+- [x] Tests prove document content never remains in logs or on disk. — T10 `tests/privacy-audit.test.ts`
+- [x] `npm run check` passes with `src/core/` coverage ≥ 90%. — 178 tests at the time, core 97% (`docs/COVERAGE.md`)
 
-## 8. 미결 사항
+**v0.1 completion verdict: met (2026-09-05).** What remained was the release procedure (TASKS.md release checklist), completed 2026-09-06.
 
-- [x] npm 패키지명·bin 이름 — **`msg-agent`로 확정(2026-09-05, Jin)**. `package.json` name/bin, 설정 경로 `~/.msg-agent/`, README 반영, `private` 해제 완료. 조회 당시 후보(참고):
-  1. `msg-agent` — 저장소 이름과 동일, bin `msg-agent`
-  2. `docslate` — 짧고 브랜드화 가능(document + translate), bin `docslate`
-  3. `chatdoc-translate` — 기능 설명형, bin `chatdoc-translate`
-  - 대안이었던 스코프 패키지 `@shiz_son/msg-agent`는 불필요. 반영 완료: `package.json` name·bin `msg-agent`, 설정 경로 `~/.msg-agent/`, README. `npm publish`는 실 스모크 후 사람이 실행.
-- [x] 짧은/긴 임계치 기본값(3,000자) — 2026-09-05 실 스모크(영어 이력서 4,755자 → 요약+파일) 후 **3,000 유지**로 결정(Jin). 사용자별 조정은 config `inlineThresholdChars`.
-- [ ] 요약 프롬프트에 문서 유형별 템플릿(계약서/매뉴얼/공지) 둘지 v0.2 검토
-- [ ] Viber 어댑터 시 웹훅 호스팅 권장안(Cloudflare Tunnel vs 배포)
+## 8. Open items
+
+- [x] npm package and bin name — **decided: `msg-agent` (2026-09-05, Jin)**. `package.json` name/bin, config path `~/.msg-agent/`, README updated, `private` removed. Candidates at the time, for reference:
+  1. `msg-agent` — same as the repository name, bin `msg-agent`
+  2. `docslate` — short and brandable (document + translate), bin `docslate`
+  3. `chatdoc-translate` — descriptive, bin `chatdoc-translate`
+  - The scoped alternative `@shiz_son/msg-agent` was not needed. Applied: `package.json` name/bin `msg-agent`, config path `~/.msg-agent/`, README. `npm publish` is run by a human after the real smoke.
+- [x] Short/long threshold default (3,000 chars) — after the 2026-09-05 real smoke (English résumé, 4,755 chars → summary + file), **kept at 3,000** (Jin). Per-user adjustment via config `inlineThresholdChars`.
+- [ ] Whether the summary prompt should have per-document-type templates (contract / manual / notice) — review in v0.2
+- [ ] Recommended webhook hosting for a Viber adapter (Cloudflare Tunnel vs deployment)

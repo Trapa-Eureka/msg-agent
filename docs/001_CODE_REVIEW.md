@@ -1,172 +1,195 @@
-# 001. 전체 소스 코드 검수 결과
+# 001. Full source-code review results
 
-## 발견 사항 — Critical → High → Medium → Low
+> Reviewed on 2026-09-05 at commit `fda3f25`. Remediation status per item was added on 2026-09-06 (see `docs/TASKS.md`, R series). The findings below are the original review; the **Status** line at the end of each item records what was done.
 
-Critical: 확인된 사항 없음. High 3건, Medium 13건, Low 3건으로 총 19건이다. 심각도는 실제 영향과 발생 조건을 기준으로 분류했으며, 정적 분석으로 확인한 위험과 실행 재현 결과를 구분했다.
+## Findings — Critical → High → Medium → Low
 
-### 01. [High] 사용자 인증 없이 유료 번역과 전역 설정 변경을 허용
+Critical: none found. High 3, Medium 13, Low 3 — 19 items in total. Severity is based on real impact and the conditions needed to trigger it; risks confirmed by static analysis are distinguished from results reproduced by execution.
 
-- 파일/행: `src/adapters/telegramAdapter.ts:52-65`, `src/core/pipeline.ts:369-386`, `src/cli/start.ts:73-79`.
-- 문제: 문서와 명령을 받기 전에 허용 사용자·채팅을 검사하지 않는다. 명령에는 발신자 ID조차 전달되지 않으며 `/lang`, `/mode`는 모든 채팅이 공유하는 설정 파일을 변경한다.
-- 영향: 봇에 메시지를 보낼 수 있는 제3자가 소유자의 API 비용을 발생시키거나 다른 대화의 번역 언어와 모드를 바꿀 수 있다. 개인용이라는 제품 설명만으로 접근이 제한되지는 않는다.
-- 근거: 모든 문서 이벤트가 곧바로 `docHandler`로 전달되고, 설정 저장 경로는 단일 `FileSettings` 인스턴스다. 허용 목록 또는 소유자 검증 경로가 없다.
-- 권장 수정: 온보딩에서 소유자와 허용 채팅을 설정하고 다운로드·명령 실행 전에 검증한다. 그룹 문서 수신 권한과 전역 설정 변경 권한을 분리한다.
+### 01. [High] Paid translation and global settings changes allowed without user authentication
 
-### 02. [High] 공백을 제외한 글자 수로 비용을 제한해 실제 입력량을 통제하지 못함
+- Files: `src/adapters/telegramAdapter.ts:52-65`, `src/core/pipeline.ts:369-386`, `src/cli/start.ts:73-79`.
+- Problem: allowed users/chats are not checked before documents and commands are accepted. Commands do not even carry the sender ID, and `/lang`, `/mode` change the config file shared by every chat.
+- Impact: any third party able to message the bot can incur the owner's API costs or change other conversations' translation language and mode. Describing the product as "personal" does not restrict access by itself.
+- Evidence: every document event goes straight to `docHandler`, and the settings write path is a single `FileSettings` instance. There is no allow-list or owner-verification path.
+- Recommendation: configure the owner and allowed chats during onboarding and verify before downloading or executing commands. Separate the permission to submit documents in a group from the permission to change global settings.
+- **Status: fixed in R1** — deny by default, pairing via `/start <code>`, owner-only `/mode` `/lang` `/allow` `/deny`, strict `access` schema.
 
-- 파일/행: `src/core/sections.ts:118-120`, `src/core/pipeline.ts:149-158,244-250`, `src/core/prompts.ts:53`.
-- 문제: 비용 가드는 모든 공백을 제거한 길이를 사용하지만 청크 분할과 요약 요청에는 공백이 포함된 텍스트가 들어간다. 청크 개수·전체 요청 입력량의 별도 상한도 없다.
-- 영향: 제한보다 훨씬 큰 입력이 짧은 문서로 승인되어 다수의 유료 요청을 생성한다. 요약은 전체 텍스트를 한 번에 보내므로 모델 입력 한도 실패도 가능하다.
-- 실행 재현: `('word' + ' '.repeat(3990)).repeat(100)`은 원문 399,400자, `countChars` 결과 400자, 실제 `structureText` → `chunkDocument` 결과 99개 청크였다.
-- 권장 수정: 사용자 표시용 글자 수와 비용 가드를 분리한다. 실제 전송 문자열 길이 또는 토큰 추정량, 청크 개수, 문서 전체 요청 예산에 상한을 적용하고 요약에도 같은 예산을 적용한다.
+### 02. [High] Cost limit counts characters without whitespace, so the real input volume is not controlled
 
-### 03. [High] 잘못된 설정 JSON의 오류 메시지에 비밀값 일부가 노출될 수 있음
+- Files: `src/core/sections.ts:118-120`, `src/core/pipeline.ts:149-158,244-250`, `src/core/prompts.ts:53`.
+- Problem: the cost guard uses the length with all whitespace removed, while chunking and summary requests send text with whitespace included. There is no separate cap on chunk count or total request input.
+- Impact: input far larger than the limit is approved as a short document and generates many paid requests. Summaries send the whole text at once, so model input-limit failures are also possible.
+- Reproduction: `('word' + ' '.repeat(3990)).repeat(100)` is 399,400 characters, `countChars` reported 400, and the real `structureText` → `chunkDocument` path produced 99 chunks.
+- Recommendation: separate the display character count from the cost guard. Cap the actual transmitted string length or estimated tokens, the chunk count and the per-document request budget, and apply the same budget to summaries.
+- **Status: fixed in R2** — whitespace-inclusive length, `maxChunksPerDoc`, per-chat rate limit, daily character budget.
 
-- 파일/행: `src/adapters/configStore.ts:21-22,35-38`, `src/core/configMessages.ts:145-154`, `src/cli/status.ts:24-29`.
-- 문제: `JSON.parse`의 원본 오류 메시지를 `detail`에 저장한 뒤 CLI에 그대로 출력한다. 런타임의 JSON 오류 메시지에는 입력 문자열 일부가 들어갈 수 있다.
-- 영향: API 키·봇 토큰을 포함한 설정을 잘못 편집했을 때 비밀값 일부가 터미널 출력이나 수집 로그에 남는다. 정상 설정의 마스킹으로 막을 수 없는 오류 경로다.
-- 실행 재현: Node v24.12.0에서 합성 문자열 `literal:FAKE_SECRET_FOR_REVIEW`를 파싱하고 같은 설명 함수를 적용하자 `"literal:FA"... is not valid JSON`이 출력되었다. 실제 비밀값은 사용하지 않았다.
-- 권장 수정: JSON 오류 원문을 사용자 출력으로 전달하지 않는다. 고정 오류 코드와 안전하게 추출한 위치 정보만 제공하고 비밀값 표식이 포함된 잘못된 JSON의 출력 누출 회귀 검증을 추가한다.
+### 03. [High] Secret fragments can leak through the error message for malformed config JSON
 
-### 04. [Medium] 실제 long polling은 모든 채팅을 직렬 처리
+- Files: `src/adapters/configStore.ts:21-22,35-38`, `src/core/configMessages.ts:145-154`, `src/cli/status.ts:24-29`.
+- Problem: the raw `JSON.parse` error message is stored in `detail` and printed as-is by the CLI. The runtime's JSON error messages may include part of the input string.
+- Impact: when a config containing API keys or bot tokens is edited incorrectly, secret fragments end up in terminal output or collected logs. Masking on the normal path does not protect this error path.
+- Reproduction: on Node v24.12.0, parsing the synthetic string `literal:FAKE_SECRET_FOR_REVIEW` and applying the same explanation function printed `"literal:FA"... is not valid JSON`. No real secret was used.
+- Recommendation: never forward parser error text to user output. Provide a fixed error code and safely extracted position information only, and add a regression test for output leakage from malformed JSON containing a secret marker.
+- **Status: fixed in R3** — fixed `syntax` code, regression test with a signature.
 
-- 파일/행: `src/adapters/telegramAdapter.ts:63-65,138`, `src/core/pipeline.ts:67-74`.
-- 문제: 문서 핸들러가 전체 번역 완료를 기다리는 상태로 grammY의 기본 `bot.start()`를 사용한다. 설치된 grammY의 `out/bot.js:191-196`은 업데이트마다 `await this.handleUpdate(update)`를 수행한다.
-- 영향: 한 채팅의 긴 번역이 다른 채팅의 명령·문서 처리까지 막는다. 코어의 채팅별 큐와 설계 문서의 채팅 간 동시 처리 보장이 운영 경로에서는 작동하지 않는다.
-- 실행 재현: 설치된 봇의 배치 처리 경로에 서로 다른 채팅 2개를 넣고 첫 핸들러를 보류했다. 해제 전에는 첫 채팅만 실행되었고 해제 후에야 둘째가 실행되었다. 외부 네트워크는 사용하지 않았다.
-- 권장 수정: 제한된 동시 실행을 지원하는 업데이트 소비 경로를 사용하고 같은 채팅 순서는 기존 큐로 유지한다. 종료 시 실행 중 작업을 기다리도록 연결하고 실제 업데이트 배치 경로로 검증한다.
+### 04. [Medium] Real long polling processes every chat serially
 
-### 05. [Medium] polling 초기화 실패가 시작 성공으로 보고됨
+- Files: `src/adapters/telegramAdapter.ts:63-65,138`, `src/core/pipeline.ts:67-74`.
+- Problem: the document handler awaits the whole translation while grammY's default `bot.start()` is used. The installed grammY (`out/bot.js:191-196`) does `await this.handleUpdate(update)` per update.
+- Impact: one chat's long translation blocks command and document processing for every other chat. The core's per-chat queue and the design's cross-chat concurrency guarantee do not hold on the production path.
+- Reproduction: two different chats were fed into the installed bot's batch processing path with the first handler held. Only the first chat ran until it was released; the second ran only afterwards. No external network was used.
+- Recommendation: use an update-consumption path with bounded concurrency while keeping per-chat ordering through the existing queue. Wire shutdown to wait for in-flight work and verify on the real update-batch path.
+- **Status: fixed in R5** — non-blocking dispatch, `drain()`, global `maxConcurrentChats`.
 
-- 파일/행: `src/adapters/telegramAdapter.ts:134-140`, `src/cli/start.ts:85-92`, `src/cli/index.ts:116-121`.
-- 문제: `bot.start()`를 백그라운드에 두고 오류를 콜백으로 소비하므로 `TelegramAdapter.start()`가 준비 완료 전에 성공한다. 상위 계층은 곧바로 `daemon.started`와 시작 안내를 출력한다.
-- 영향: 초기 `getMe`·`deleteWebhook` 실패 등으로 봇이 수신할 수 없어도 시작 성공처럼 보이며 실패 종료 코드도 전달되지 않는다. 운영 감시가 장애를 놓칠 수 있다.
-- 실행 재현: `deleteWebhook`에 합성 오류를 주입했을 때 `start()`는 resolve되었지만 `bot.isRunning()`은 false였고 오류 콜백만 호출되었다.
-- 권장 수정: 준비 완료 신호와 polling 수명 Promise를 분리한다. 초기화 오류는 시작 호출에 전파하고, 시작 후 치명적 polling 오류는 데몬 종료 상태 및 프로세스 종료 코드에 반영한다.
+### 05. [Medium] Polling initialization failure is reported as a successful start
 
-### 06. [Medium] 다운로드와 OpenAI 요청에 애플리케이션 시간 제한·취소가 없음
+- Files: `src/adapters/telegramAdapter.ts:134-140`, `src/cli/start.ts:85-92`, `src/cli/index.ts:116-121`.
+- Problem: `bot.start()` runs in the background and errors are consumed by a callback, so `TelegramAdapter.start()` succeeds before readiness. Upper layers immediately print `daemon.started` and the start notice.
+- Impact: even when the bot cannot receive because the initial `getMe` / `deleteWebhook` failed, it looks like a successful start and no failure exit code is propagated. Operational monitoring can miss the outage.
+- Reproduction: with a synthetic error injected into `deleteWebhook`, `start()` resolved, `bot.isRunning()` was false, and only the error callback fired.
+- Recommendation: separate the readiness signal from the polling lifetime promise. Propagate initialization errors to the start call, and reflect fatal polling errors after start in the daemon state and process exit code.
+- **Status: fixed in R5** — `start()` awaits init + ready or rejects; fatal polling failure → `onError(e, true)` → exit code 1.
 
-- 파일/행: `src/adapters/telegramAdapter.ts:94-96,143-145`, `src/adapters/providers/openai.ts:46-54,79`, `src/cli/start.ts:94-105`.
-- 문제: fetch와 응답 본문 읽기에 기한이나 종료용 `AbortSignal`을 전달하지 않는다. 종료는 polling Promise 완료를 기다리지만 진행 중 다운로드·프로바이더 요청을 취소할 수 없다.
-- 영향: 응답을 끝내지 않는 서버·프록시 때문에 문서 작업이 장시간 붙잡힐 수 있다. 현재 직렬 polling에서는 다른 채팅까지 지연되고 종료 신호 후 대기 역시 길어질 수 있다. 런타임 자체 제한의 존재와 별개로 작업 전체의 제한은 없다.
-- 근거: 요청 생성과 본문 읽기, 데몬 종료 경로의 정적 분석. 실제 네트워크를 무기한 대기시키는 실험은 하지 않았다.
-- 권장 수정: 요청·본문 수신을 포함하는 기한을 두고 종료 신호와 결합한다. 타임아웃과 사용자 종료를 구분해 취소 시 재시도를 막고, 종료 대기에도 상한을 둔다.
+### 06. [Medium] No application-level timeouts or cancellation for downloads and OpenAI requests
 
-### 07. [Medium] Claude SDK와 파이프라인의 중첩 재시도로 청크당 최대 6회 요청
+- Files: `src/adapters/telegramAdapter.ts:94-96,143-145`, `src/adapters/providers/openai.ts:46-54,79`, `src/cli/start.ts:94-105`.
+- Problem: fetch and body reads receive no deadline or shutdown `AbortSignal`. Shutdown waits for the polling promise but cannot cancel in-progress downloads or provider requests.
+- Impact: a server or proxy that never finishes a response can hold a document job for a long time. Under the current serial polling other chats are delayed too, and waiting after a shutdown signal can also be long. The runtime's own limits aside, there is no limit on the job as a whole.
+- Evidence: static analysis of request creation, body reads and the daemon shutdown path. No experiment holding a real network connection indefinitely was run.
+- Recommendation: add a deadline covering the request and body reception, combined with the shutdown signal. Distinguish timeouts from user shutdown so cancellation does not retry, and cap the shutdown wait.
+- **Status: fixed in R4** — `AbortSignal.timeout` on OpenAI (90 s) and Telegram body fetch (60 s), Claude SDK timeout 120 s, streaming byte cap.
 
-- 파일/행: `src/adapters/providers/claude.ts:55-61`, `src/core/pipeline.ts:293-307`.
-- 문제: 프로바이더는 `maxRetries`가 생략되면 SDK 기본값을 유지한다. 설치된 SDK는 기본 2회 재시도이며, 파이프라인이 같은 작업을 최대 2번 호출한다.
-- 영향: 설계의 청크당 최초 1회 + 재시도 1회와 달리 최대 6회 요청한다. 장애 시 지연과 서비스 부하가 늘고, 응답 유실 뒤 재시도라면 중복 처리 비용이 발생할 수 있다.
-- 실행 재현: 외부 호출을 모두 529 응답 목으로 대체하고 파이프라인과 동일한 2회 호출 루프를 실행하자 fetch 호출이 6회였다. 기존 오류 테스트는 `maxRetries: 0`을 명시해 운영 기본값을 검증하지 않는다.
-- 권장 수정: 재시도 책임을 한 계층에 둔다. 파이프라인이 담당한다면 SDK 기본값을 0으로 지정하고 전체 요청 횟수와 대기 정책을 검증한다.
+### 07. [Medium] Nested retries in the Claude SDK and the pipeline allow up to six requests per chunk
 
-### 08. [Medium] DOCX 변환에서 링크 주소와 목록 번호 손실
+- Files: `src/adapters/providers/claude.ts:55-61`, `src/core/pipeline.ts:293-307`.
+- Problem: the provider keeps the SDK default when `maxRetries` is omitted. The installed SDK retries twice by default, and the pipeline calls the same operation up to twice.
+- Impact: contrary to the design's one initial call + one retry per chunk, up to six requests are made. Latency and service load grow during outages, and if a response was lost before a retry, duplicate processing costs may occur.
+- Reproduction: replacing every external call with a 529 mock and running the pipeline's two-call loop produced six fetch calls. The existing error tests pass `maxRetries: 0` explicitly and so do not exercise the production default.
+- Recommendation: keep retry responsibility in one layer. If the pipeline owns it, set the SDK default to 0 and verify total request count and back-off policy.
+- **Status: fixed in R2** — SDK `maxRetries` defaults to 0; test verifies one HTTP request per attempt.
 
-- 파일/행: `src/adapters/extractors/docx.ts:17-28`.
-- 문제: HTML 태그를 일괄 제거해 `<a href>`의 주소를 잃고 모든 `<li>`를 `- `로 바꿔 순서 있는 목록의 번호와 계층도 없앤다.
-- 영향: 계약 조항 번호, 순서가 중요한 절차, 링크로만 제공된 결제·참고 주소가 번역 전에 사라진다. 번역 프롬프트는 이미 제거된 정보를 복구할 수 없다.
-- 실행 재현: `<ol><li>Pay</li><li>Ship</li></ol><p><a href="https://example.com/pay">Payment portal</a></p>`에서 목록 번호와 URL이 모두 사라지고 글머리표와 표시 문구만 남았다.
-- 권장 수정: HTML 구조를 해석하는 변환기를 사용해 링크를 Markdown 링크로, 순서 목록을 번호 목록으로 변환한다. 중첩 목록과 표도 구조를 유지하도록 처리한다.
+### 08. [Medium] DOCX conversion loses link URLs and list numbering
 
-### 09. [Medium] Markdown 제목 단계와 청크 경계의 구조가 변형됨
+- Files: `src/adapters/extractors/docx.ts:17-28`.
+- Problem: HTML tags are stripped wholesale, dropping the `href` of `<a>` and turning every `<li>` into `- `, which erases ordered-list numbers and hierarchy.
+- Impact: contract clause numbers, procedures where order matters, and payment/reference addresses given only as links disappear before translation. The translation prompt cannot recover information that was already removed.
+- Reproduction: `<ol><li>Pay</li><li>Ship</li></ol><p><a href="https://example.com/pay">Payment portal</a></p>` lost both the list numbers and the URL, leaving only bullets and the link text.
+- Recommendation: use a converter that understands HTML structure — links as Markdown links, ordered lists as numbered lists. Keep the structure of nested lists and tables as well.
+- **Status: fixed in R6** — linear HTML scan keeps heading levels, `[text](url)`, numbered and nested lists.
 
-- 파일/행: `src/core/sections.ts:6,19-22,45-49`, `src/core/chunker.ts:59-74,105`.
-- 문제: 제목에서 `#` 개수를 버리고 모든 제목을 `#`로 재생성한다. 긴 문단의 문장 분할은 원래 구분자를 공백으로 대체하며 재조립은 모든 청크 사이에 빈 줄을 추가한다.
-- 영향: 상위·하위 제목 관계, 목록 들여쓰기, 코드·표 등 공백에 의미가 있는 구조가 번역 입력이나 결과에서 달라진다. 현재 일부 테스트는 공백과 제목 표식을 제거하고 비교해 이를 놓친다.
-- 실행 재현: `## Terms`와 `### Payment`가 모두 1단계 제목으로 바뀌었다. `- one\n- two\n- three\n- four`를 15자로 분할하면 후속 목록 항목 앞에 추가 공백이 생겼다.
-- 권장 수정: 섹션에 제목 단계와 원래 구분자를 보존한다. Markdown 블록 경계와 코드·목록 구조를 고려해 분할하고 구분자 메타데이터로 재조립한다.
+### 09. [Medium] Markdown heading levels and chunk-boundary structure are altered
 
-### 10. [Medium] 앞부분 언어만 보고 혼합 언어 문서 전체를 스킵
+- Files: `src/core/sections.ts:6,19-22,45-49`, `src/core/chunker.ts:59-74,105`.
+- Problem: the number of `#` in headings is discarded and every heading is regenerated as `#`. Sentence splitting of long paragraphs replaces the original separator with a space, and reassembly inserts a blank line between every chunk.
+- Impact: parent/child heading relations, list indentation and whitespace-significant structure such as code and tables change in the translation input or output. Some current tests strip whitespace and heading markers before comparing and therefore miss this.
+- Reproduction: `## Terms` and `### Payment` both became level-1 headings. Splitting `- one\n- two\n- three\n- four` at 15 characters introduced extra whitespace before later list items.
+- Recommendation: keep the heading level and the original separators in sections. Split with awareness of Markdown block boundaries and code/list structure, and reassemble using separator metadata.
+- **Status: fixed in R6** — `Section.level`, `Chunk.sep`, `assembleChunks(translated, chunks)` round-trips losslessly.
 
-- 파일/행: `src/core/detector.ts:13,30-48`, `src/core/pipeline.ts:153-158,171-173`.
-- 문제: 처음 2,000자만 검사한 신뢰도로 문서 전체의 동일 언어 여부를 결정한다. 문서 중간·끝부분은 확인하지 않는다.
-- 영향: 모국어 표지·서문 뒤에 긴 외국어 본문이 있는 문서를 자동 번역하지 않는다. 사용자는 외국어 본문이 남아 있는데도 이미 모국어라는 안내를 받는다.
-- 실행 재현: 영어 문장 24회 뒤에 한국어 문장 200회를 붙이면 영어 신뢰도 1로 감지되고 모국어 `en`에서 동일 언어 판정이 true였다.
-- 권장 수정: 문서 여러 위치 또는 섹션을 표본 검사하고 일관될 때만 전체 스킵한다. 혼합 신호가 있으면 번역 경로로 보내거나 섹션별 판정한다.
+### 10. [Medium] A mixed-language document is skipped entirely based on its beginning
 
-### 11. [Medium] 상한 초과 안내의 `/summary` 해결 방법이 작동하지 않음
+- Files: `src/core/detector.ts:13,30-48`, `src/core/pipeline.ts:153-158,171-173`.
+- Problem: the same-language decision for the whole document is made from the confidence of the first 2,000 characters only. The middle and end are never examined.
+- Impact: a document with a native-language cover page or preface followed by a long foreign-language body is not translated automatically. The user is told it is already in their language while the foreign text remains.
+- Reproduction: 24 English sentences followed by 200 Korean sentences were detected as English with confidence 1, and with native language `en` the same-language decision was true.
+- Recommendation: sample several positions or sections and skip only when they are consistent. On mixed signals, route to translation or decide per section.
+- **Status: fixed in R6** — head/middle/tail sampling; any disagreement caps confidence at 0.6, so mixed documents are translated.
 
-- 파일/행: `src/core/outputPlanner.ts:51-55`, `src/phrases/ko.ts:15-17`, `src/phrases/en.ts:15-17`.
-- 문제: 상한 초과 시 요약 명령을 제안하지만 `/summary` 역시 같은 상한 검사에서 거절된다. 요약 전용 플랜도 없고 정상 요약 플랜은 전문 번역까지 요구한다.
-- 영향: 안내대로 조작해도 결과를 받을 수 없으며 다운로드·추출만 반복한다.
-- 실행 재현: `charCount: 120001`, `maxChars: 120000`, `request: 'summary'`는 `over_max_chars` 거절이었다.
-- 권장 수정: 현 비용 상한을 유지한다면 파일 분할 등 실행 가능한 안내로 바꾼다. 요약 전용 복구 기능을 제공하려면 별도 제한을 갖춘 플랜을 설계 문서부터 정의한다. 기존 상한을 단순 우회하면 안 된다.
+### 11. [Medium] The `/summary` remedy suggested in the over-cap notice does not work
 
-### 12. [Medium] 설정을 제자리 덮어써 저장 실패 시 기존 설정을 손상시킬 수 있음
+- Files: `src/core/outputPlanner.ts:51-55`, `src/phrases/ko.ts:15-17`, `src/phrases/en.ts:15-17`.
+- Problem: the over-cap message suggests the summary command, but `/summary` is rejected by the same cap check. There is no summary-only plan, and the normal summary plan requires a full translation too.
+- Impact: following the guidance yields no result and only repeats download and extraction.
+- Reproduction: `charCount: 120001`, `maxChars: 120000`, `request: 'summary'` → `over_max_chars` rejection.
+- Recommendation: if the current cap stays, change the guidance to something actionable such as splitting the file. If a summary-only recovery is wanted, define a plan with its own limits in the design document first. Do not simply bypass the existing cap.
+- **Status: fixed in R2** — the notice now asks to split the file; `/summary` is no longer suggested.
 
-- 파일/행: `src/adapters/configStore.ts:55-63`, `src/adapters/fileSettings.ts:14-17`.
-- 문제: `writeFileSync`가 기존 파일을 직접 truncate한 뒤 기록한다. 중단이나 쓰기 실패 시 기존 정상 설정이 보존되지 않는다. 권한이 느슨한 기존 파일의 chmod도 비밀값 기록 후에 실행된다.
-- 영향: `/lang` 같은 일반 설정 변경 중 디스크 오류·프로세스 중단이 발생하면 다음 시작이 불가능해질 수 있다. 다른 프로세스의 읽기가 중간 상태를 관측하거나 기존 권한으로 새 비밀값을 읽는 짧은 구간도 생긴다.
-- 근거: 저장 순서의 정적 분석. 사용자 설정에 대한 장애 주입이나 변경은 하지 않았다.
-- 권장 수정: 같은 디렉터리의 고유 임시 파일을 600으로 생성하고 기록을 완료한 다음 원자적 rename으로 교체한다. 실패 시 원본을 유지하고 필요하면 fsync 및 여러 프로세스 간 잠금을 추가한다.
+### 12. [Medium] In-place config overwrite can corrupt the existing config when a save fails
 
-### 13. [Medium] 선언한 Node 지원 범위가 실제 의존성 요구와 불일치
+- Files: `src/adapters/configStore.ts:55-63`, `src/adapters/fileSettings.ts:14-17`.
+- Problem: `writeFileSync` truncates the existing file directly before writing. On interruption or write failure, the previous valid config is not preserved. The chmod for a loosely-permissioned existing file also runs after the secret has been written.
+- Impact: a disk error or process interruption during an ordinary setting change such as `/lang` can make the next start impossible. Another process may briefly observe an intermediate state or read the new secret under the old permissions.
+- Evidence: static analysis of the save order. No fault injection or change was made to the user's config.
+- Recommendation: create a unique temp file in the same directory with mode 600, complete the write, then replace atomically with rename. Keep the original on failure; add fsync and cross-process locking if needed.
+- **Status: fixed in R3** — temp file (600, `wx`) + rename; failed saves keep the previous file.
 
-- 파일/행: `package.json:7-9,48`, `src/adapters/configStore.ts:95-101`, `src/cli/index.ts:3`.
-- 문제: 패키지는 Node `>=20`을 선언하지만 설치된 commander 15는 `>=22.12.0`을 요구한다. `process.loadEnvFile`도 주석에 명시된 대로 Node 20.12 이후 API다.
-- 영향: 지원 대상으로 안내된 Node 20 환경에서 설치가 거절되거나 지원되지 않는 조합으로 CLI를 실행하게 된다. 오래된 20.x에서는 `.env` 로딩 자체도 실패할 수 있다.
-- 근거: 설치된 `node_modules/commander/package.json:60-62`와 소스 확인. 검수 환경은 Node v24.12.0이므로 Node 20 실행 테스트는 하지 않았다.
-- 권장 수정: 최소 Node 버전을 실제 의존성 요구에 맞추고 README·CI에 반영하거나, Node 20 지원이 필요하면 호환되는 의존성과 환경변수 로딩 구현을 선택한다.
+### 13. [Medium] The declared Node support range does not match dependency requirements
 
-### 14. [Medium] OpenAI JSON 응답을 검증 없이 타입 단언
+- Files: `package.json:7-9,48`, `src/adapters/configStore.ts:95-101`, `src/cli/index.ts:3`.
+- Problem: the package declares Node `>=20`, but the installed commander 15 requires `>=22.12.0`. `process.loadEnvFile` is also a Node 20.12+ API, as the comment notes.
+- Impact: on the advertised Node 20, installation is refused or the CLI runs on an unsupported combination. On older 20.x, `.env` loading itself can fail.
+- Evidence: the installed `node_modules/commander/package.json:60-62` and the source. The review environment is Node v24.12.0, so Node 20 was not exercised.
+- Recommendation: align the minimum Node version with the real dependency requirements and reflect it in README/CI, or choose compatible dependencies and an env-loading implementation if Node 20 support is required.
+- **Status: fixed in R7** — `engines.node >= 22.12.0`, docs updated.
 
-- 파일/행: `src/adapters/providers/openai.ts:22-24,77-89`.
-- 문제: `res.json()` 결과를 `ChatCompletion`으로 단언한다. JSON 문법만 검사하고 객체 여부, 배열 여부, content 문자열 여부는 검증하지 않는다.
-- 영향: 형식이 잘못된 성공 응답이 `ProviderError('bad_response')`가 아닌 `TypeError`로 빠져 재시도·오류 분류가 깨진다. TypeScript strict 모드는 외부 JSON의 실제 값을 보장하지 않는다.
-- 실행 재현: 200 응답 본문을 `null` 또는 `{choices:[{message:{content:42}}]}`로 주입하자 모두 `TypeError`가 발생했고 `kind`가 없었다.
-- 권장 수정: 이미 사용하는 zod 등으로 응답을 경계에서 검증하고 불일치를 안전한 `bad_response` 오류로 통일한다. 정상 종료 사유와 거절 응답도 명시적으로 검증한다.
+### 14. [Medium] OpenAI JSON responses are type-asserted without validation
 
-### 15. [Medium] 단일 grapheme이 상한보다 크면 메시지·청크 상한을 위반
+- Files: `src/adapters/providers/openai.ts:22-24,77-89`.
+- Problem: the result of `res.json()` is asserted as `ChatCompletion`. Only JSON syntax is checked — not whether it is an object, an array, or whether content is a string.
+- Impact: a malformed successful response escapes as a `TypeError` instead of `ProviderError('bad_response')`, breaking retry and error classification. TypeScript strict mode does not guarantee the real value of external JSON.
+- Reproduction: injecting a 200 body of `null` or `{choices:[{message:{content:42}}]}` produced a `TypeError` in both cases, with no `kind`.
+- Recommendation: validate the response at the boundary with the zod already in use and unify mismatches as a safe `bad_response` error. Validate normal finish reasons and refusal responses explicitly too.
+- **Status: fixed in R4** — zod schema; five malformed shapes → `bad_response`.
 
-- 파일/행: `src/core/textSplit.ts:40-50`, `src/core/chunker.ts:14-24`.
-- 문제: 버퍼가 비어 있으면 grapheme 자체가 제한을 초과해도 그대로 추가한다. 하나의 grapheme은 결합 문자 때문에 매우 길어질 수 있다.
-- 영향: 실제 Telegram 전송 제한 또는 프로바이더 청크 제한보다 큰 문자열을 생성한다. 문자 경계를 지킨다는 보장이 길이 제한 보장과 충돌하는 경우의 정책이 없다.
-- 실행 재현: `'a' + '\u0301'.repeat(4200)`은 기본 `splitForMessenger`에서 길이 4,201인 메시지, 기본 `chunkDocument`에서 길이 4,201인 청크가 되었다.
-- 권장 수정: 상한보다 큰 단일 grapheme을 명시적인 입력 오류로 거절하거나, 플랫폼이 허용하는 안전한 대체 분할 정책을 정한다. 모든 반환 요소의 길이 불변식을 검증한다.
+### 15. [Medium] A single grapheme larger than the limit violates the message/chunk cap
 
-### 16. [Medium] 확장자가 MIME 우선 라우팅을 가로챔
+- Files: `src/core/textSplit.ts:40-50`, `src/core/chunker.ts:14-24`.
+- Problem: when the buffer is empty, a grapheme is appended even if it alone exceeds the limit. A single grapheme can be very long because of combining characters.
+- Impact: strings larger than the real Telegram send limit or the provider chunk limit are produced. There is no policy for the case where the character-boundary guarantee conflicts with the length-limit guarantee.
+- Reproduction: `'a' + '́'.repeat(4200)` produced a 4,201-character message from the default `splitForMessenger` and a 4,201-character chunk from the default `chunkDocument`.
+- Recommendation: either reject a single grapheme larger than the limit as an explicit input error, or define a safe alternative split policy the platform accepts. Verify the length invariant of every returned element.
+- **Status: fixed in R2** — code-point fallback split; every part ≤ the limit.
 
-- 파일/행: `src/adapters/extractors/pdf.ts:8-9`, `src/adapters/extractors/docx.ts:32-33`, `src/adapters/extractors/index.ts:10-11`, `src/core/pipeline.ts:115`.
-- 문제: 각 추출기가 MIME 또는 확장자 중 하나만 맞아도 지원한다고 답하고 첫 번째 추출기를 고른다. 설계의 명확한 MIME 우선, 불명확할 때 확장자 대체 규칙과 다르다.
-- 영향: DOCX MIME이지만 이름이 `report.pdf`인 파일은 먼저 배치된 PDF 추출기에 전달되어 정상 DOCX라도 손상 파일로 보고된다.
-- 근거: `createExtractors()`의 순서와 각 `supports()`의 OR 조건으로 결정되는 정적 경로. 기존 MIME 테스트는 충돌하는 확장자를 넣지 않는다.
-- 권장 수정: 라우터에서 명확한 MIME 일치를 먼저 평가하고 불명확한 MIME에만 확장자 대체를 적용한다. 파이프라인과 테스트가 같은 라우터를 사용하도록 통합한다.
+### 16. [Medium] The extension pre-empts MIME-first routing
 
-### 17. [Low] 온보딩 취소를 검증 실패와 동일하게 재시도
+- Files: `src/adapters/extractors/pdf.ts:8-9`, `src/adapters/extractors/docx.ts:32-33`, `src/adapters/extractors/index.ts:10-11`, `src/core/pipeline.ts:115`.
+- Problem: each extractor answers "supported" if either the MIME type or the extension matches, and the first extractor wins. This differs from the design's rule of clear-MIME-first with extension fallback only when unclear.
+- Impact: a file with the DOCX MIME type but named `report.pdf` is handed to the PDF extractor placed first and reported as corrupt even though it is a valid DOCX.
+- Evidence: the static path determined by the order of `createExtractors()` and the OR condition in each `supports()`. Existing MIME tests do not use conflicting extensions.
+- Recommendation: evaluate a clear MIME match first in the router and apply the extension fallback only for unclear MIME types. Make the pipeline and the tests use the same router.
+- **Status: fixed in R6** — `core/route.ts` decides by MIME first; the pipeline uses the router.
 
-- 파일/행: `src/cli/init.ts:79-93,114-127,153-163`.
-- 문제: 질문 취소와 입력 오류가 모두 `undefined`로 표현되고 `withAttempts`가 같은 값으로 재시도한다.
-- 영향: 언어 선택이나 비밀값 입력에서 취소해도 다음 입력창이 다시 열릴 수 있어 취소 의도가 즉시 반영되지 않는다.
-- 근거: `Asker`는 undefined를 취소로 정의하지만 재시도 계층은 이를 구분하지 않는다.
-- 권장 수정: 성공·취소·유효성 실패를 구분하는 결과 타입을 사용하고 취소는 즉시 상위 호출까지 전파한다.
+### 17. [Low] Onboarding cancellation is retried like a validation failure
 
-### 18. [Low] 온보딩 저장 실패 후 오류를 얻으려고 다시 저장
+- Files: `src/cli/init.ts:79-93,114-127,153-163`.
+- Problem: a cancelled question and an invalid input are both represented as `undefined`, and `withAttempts` retries on that value.
+- Impact: cancelling the language choice or a secret input can open the next prompt again, so the intent to cancel is not honoured immediately.
+- Evidence: `Asker` defines undefined as cancel, but the retry layer does not distinguish it.
+- Recommendation: use a result type that distinguishes success, cancel and validation failure, and propagate cancel straight to the caller.
+- **Status: fixed in R7** — `CANCELLED` sentinel aborts immediately; only empty input is re-asked.
 
-- 파일/행: `src/cli/init.ts:213-218`.
-- 문제: 첫 `saveConfig` 결과를 `Result<unknown, unknown>`으로 넓혀 오류 타입을 잃고, 실패하면 같은 저장을 다시 호출한다. 두 번째 저장이 성공해도 중단 메시지와 종료 코드 1을 반환한다.
-- 영향: 실패 처리가 불필요한 추가 쓰기를 수행하고, 실제 설정 저장 여부와 사용자 안내가 불일치할 수 있다.
-- 근거: 실패 분기에서 두 번째 호출 결과의 성공 여부와 관계없이 aborted/1을 반환하는 정적 경로.
-- 권장 수정: 첫 호출의 추론 타입을 유지해 `saved.error`를 직접 설명한다. 재시도가 필요하다면 별도 정책으로 만들고 성공 결과를 정상 반환한다.
+### 18. [Low] Onboarding saves again after a failed save just to obtain the error
 
-### 19. [Low] 사용하지 않는 온보딩·계획 도우미가 테스트와 공개 export에만 남음
+- Files: `src/cli/init.ts:213-218`.
+- Problem: the first `saveConfig` result is widened to `Result<unknown, unknown>`, losing the error type, and on failure the same save is called again. Even if the second save succeeds, the abort message and exit code 1 are returned.
+- Impact: failure handling performs an unnecessary extra write, and whether the config was actually saved may not match what the user is told.
+- Evidence: the static path in the failure branch that returns aborted/1 regardless of the second call's outcome.
+- Recommendation: keep the inferred type of the first call and explain `saved.error` directly. If a retry is wanted, make it a separate policy and return success properly.
+- **Status: fixed in R7** — single call with its typed error explained.
 
-- 파일/행: `src/cli/init.ts:70-76`, `src/cli/index.ts:23-29`, `src/core/outputPlanner.ts:69-76`.
-- 문제: 고정 10개 언어 선택으로 변경된 뒤 `resolveLanguageInput`과 autocomplete 처리 경로가 실제 온보딩에서 사용되지 않는다. `needsFullTranslation`·`needsSummary`도 운영 코드에서 호출되지 않고 테스트와 export에 남아 있다.
-- 영향: 현재 실행 정책과 별도의 도우미·테스트를 유지하게 되어 변경 지점과 이해 비용이 증가한다. 이 도우미를 검증해도 실제 파이프라인 정책 검증이 되지는 않는다.
-- 근거: `src/`·`tests/` 전체 참조 검색. 언어 이름 해석과 계획 도우미의 호출은 테스트에서만 확인되었다.
-- 권장 수정: 외부 소비자를 위한 유지 계약이 있는지 확인한 뒤 사용하지 않는 경로를 제거하거나 실제 실행 경로에 통합한다. 오래된 autocomplete 설명도 현재 UI에 맞춘다.
+### 19. [Low] Unused onboarding and planning helpers remain only in tests and public exports
 
-## 검수 범위와 검증 결과
+- Files: `src/cli/init.ts:70-76`, `src/cli/index.ts:23-29`, `src/core/outputPlanner.ts:69-76`.
+- Problem: after the change to a fixed ten-language selection, `resolveLanguageInput` and the autocomplete path are no longer used by real onboarding. `needsFullTranslation` and `needsSummary` are not called by production code either and remain only in tests and exports.
+- Impact: helpers and tests separate from the real execution policy have to be maintained, increasing change points and comprehension cost. Verifying these helpers does not verify the real pipeline policy.
+- Evidence: reference search across `src/` and `tests/`. Language-name resolution and the planning helpers were called only from tests.
+- Recommendation: confirm whether an external maintenance contract exists, then remove the unused paths or integrate them into the real execution path. Update the stale autocomplete description to match the current UI.
+- **Status: fixed in R7** — helpers and the autocomplete path removed.
 
-- 기준: 2026-09-05, 커밋 `fda3f25`. 현재 diff에 한정하지 않고 `src/`의 TypeScript 43개 파일 전체를 검토했다.
-- 검토 영역: `core/` 정책·분할·언어·설정·타입·오케스트레이션, `adapters/` 저장·Telegram·추출기·프로바이더, `cli/` 온보딩·시작·상태, `phrases/`, `mocks/`.
-- 관련 자료: `package.json`, TypeScript/Vitest 설정, README, `CLAUDE.md`, SPEC/DESIGN 및 관련 테스트. SDK 동작은 설치된 의존성 소스로 대조했다.
-- 기존 자동 검사: `npm run check` 통과. typecheck, ESLint, Prettier 검사 통과. 테스트 20개 파일 / 178개 테스트 통과.
-- 커버리지: 설정상 `src/core/**` 범위이며 statements 96.92%, branches 86.79%, functions 100%, lines 97.19%. 어댑터·CLI 전체 커버리지를 뜻하지 않는다.
-- 추가 검증: 파일을 생성하지 않는 Node/tsx 인라인 스크립트로 문서 구조 변형, 공백 비용 가드, 혼합 언어 스킵, 초과 grapheme, 요약 거절, 응답 타입 오류, SDK 재시도, polling 직렬 처리·시작 실패, JSON 오류 노출을 재현했다.
-- 제한: 실 Telegram/Claude/OpenAI 호출, 실제 과금, 장애성 파일 시스템 실험, 다른 Node 버전 실행은 하지 않았다. 정적 위험은 실제 장애 발생으로 단정하지 않았다.
-- 변경 범위: 요청한 이 검수 문서만 신규 작성했다. 기존 소스·테스트·설정 문서는 수정하지 않았다. 자동 검사에 따른 커버리지 산출물은 생성될 수 있다.
+## Scope and verification
 
-## 후속 검증 우선순위
+- Baseline: 2026-09-05, commit `fda3f25`. Not limited to the current diff — all 43 TypeScript files under `src/` were reviewed.
+- Areas: `core/` policy, splitting, language, config, types and orchestration; `adapters/` storage, Telegram, extractors, providers; `cli/` onboarding, start, status; `phrases/`; `mocks/`.
+- Related material: `package.json`, TypeScript/Vitest configuration, README, `CLAUDE.md`, SPEC/DESIGN and the related tests. SDK behaviour was cross-checked against the installed dependency sources.
+- Existing automated checks: `npm run check` passes — typecheck, ESLint and Prettier pass; 20 test files / 178 tests pass.
+- Coverage: configured for `src/core/**`: statements 96.92%, branches 86.79%, functions 100%, lines 97.19%. This does not mean full adapter/CLI coverage.
+- Additional verification: inline Node/tsx scripts that create no files reproduced the document-structure changes, the whitespace cost-guard bypass, the mixed-language skip, oversized graphemes, summary rejection, response type errors, SDK retries, serial polling and start failure, and JSON error exposure.
+- Limits: no real Telegram/Claude/OpenAI calls, no real billing, no faulty-filesystem experiments, no other Node versions. Static risks were not asserted to be actual outages.
+- Scope of changes: only this review document was created. Existing source, tests and configuration documents were not modified. Coverage artifacts from the automated checks may have been generated.
 
-접근 권한과 비용 가드, 오류 출력의 비밀값 누출을 먼저 수정·검증하는 것이 좋다. 이어서 실제 long polling 수명과 요청 취소를 검증하고, 원본 구조·외부 응답 검증을 보강한다. 현재 테스트는 정상 경로와 목 기반 코어 검증에 강하지만, 운영 SDK 기본 설정 및 실패 수명주기와 원문 구조 보존의 결함까지 배제하지는 못한다.
+## Follow-up priorities
+
+Fix and verify access control, the cost guard and secret leakage in error output first. Then verify the real long-polling lifecycle and request cancellation, and strengthen source-structure and external-response validation. The current tests are strong on the happy path and mock-based core verification, but do not rule out defects in production SDK defaults, failure lifecycles and source-structure preservation.
+
+All nineteen items were addressed in R1–R7 on 2026-09-06.

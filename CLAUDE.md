@@ -1,63 +1,65 @@
-# CLAUDE.md — message 스티어링
+# CLAUDE.md — msg-agent steering
 
-메신저 업로드 문서를 모국어로 자동 번역하는 개인용 에이전트. v0.1 메신저는 Telegram(long polling), 출력은 스마트 모드. 스펙은 `docs/SPEC.md`, 설계는 `docs/DESIGN.md`.
+A personal agent that auto-translates documents uploaded to a messenger chat into your native language. v0.1 messenger is Telegram (long polling); output uses smart mode. Spec: `docs/SPEC.md`, design: `docs/DESIGN.md`.
 
-## 스택
+## Stack
 
-- Node.js 22.12+ (commander 15·`util.parseEnv` 요구), TypeScript **strict** (`noUncheckedIndexedAccess` 포함)
-- Telegram: **grammY** (타입 우수, long polling 내장) — 단 코어는 grammY를 모르고 `MessengerAdapter`만 안다
-- 문서 추출: `pdf-parse`(텍스트형 PDF), `mammoth`(DOCX), UTF-8 직독(TXT/MD)
-- 언어 감지: `franc` 계열(결정론) → 불확실 시 번역 프롬프트에 감지 위임
-- 번역: `TranslatorProvider` 인터페이스 — Claude(기본)·OpenAI 어댑터, Gemini는 v0.2 후보
-- CLI: `commander` + `prompts` (온보딩 대화형)
-- 검증: Vitest + ESLint + Prettier, 스키마 `zod`
+- Node.js 22.12+ (required by commander 15 and `util.parseEnv`), TypeScript **strict** (including `noUncheckedIndexedAccess`)
+- Telegram: **grammY** (good types, built-in long polling) — but the core never sees grammY, only `MessengerAdapter`
+- Document extraction: `pdf-parse` (text-layer PDF), `mammoth` (DOCX), direct UTF-8 read (TXT/MD)
+- Language detection: `franc` family (deterministic) → when unsure, delegate detection to the translation prompt
+- Translation: `TranslatorProvider` interface — Claude (default) and OpenAI adapters; Gemini is a v0.2 candidate
+- CLI: `commander` + `prompts` (interactive onboarding)
+- Verification: Vitest + ESLint + Prettier, schemas with `zod`
 
-## 명령어
+## Commands
 
 ```bash
-npm run check      # typecheck + lint + format:check + test(커버리지 임계치·프라이버시 감사 포함) — 태스크 완료의 필수 게이트
+npm run check      # typecheck + lint + format:check + test (with coverage thresholds and the privacy audit) — mandatory gate for task completion
 npm run test       # vitest run
 npm run typecheck  # tsc --noEmit
 npm run lint       # eslint .
-npm run cli -- <init|start|status>   # tsx 경유 CLI 실행
-npm run smoke      # 실 Telegram 봇 + 실 프로바이더 수동 스모크 (사람 전용)
+npm run cli -- <init|start|status>   # run the CLI via tsx
+npm run smoke      # manual smoke with a real Telegram bot + real provider (humans only)
 ```
 
-## 소스 레이아웃
+## Source layout
 
 ```
 src/
-  core/        # 순수 로직: pipeline, chunker, outputPlanner, detector 규약, config 스키마 — 외부 IO 없음
-  adapters/    # telegramAdapter(grammY), extractors/, providers/(claude, openai), configStore
+  core/        # pure logic: pipeline, chunker, outputPlanner, detector contract, config schema — no external IO
+  adapters/    # telegramAdapter (grammY), extractors/, providers/ (claude, openai), configStore
   mocks/       # FakeMessenger, FakeTranslator, FixtureExtractor, FixedClock
-  cli/         # init.ts(온보딩), start.ts(데몬), status.ts — 조립만
+  cli/         # init.ts (onboarding), start.ts (daemon), status.ts — assembly only
 tests/  fixtures/docs/  scripts/
 ```
 
-## 컨벤션
+## Conventions
 
-- 코어는 어댑터 구현을 모른다. 메신저 추가 = `MessengerAdapter` 구현 1개.
-- `any` 금지. 외부 입력(메신저 이벤트, 설정 파일, 프로바이더 응답)은 경계에서 `zod` 파싱.
-- 긴 처리(다운로드→추출→번역)는 진행 상태를 대화창에 알린다("번역 중… 3/7 청크") — UX가 곧 제품.
-- 에러 메시지는 원인 + 수정 방법까지, 사용자 대면 메시지는 모국어로.
-- 커밋 메시지: **영어로 작성**. 태스크 커밋은 `T{n}: summary`, 그 외는 `docs:`/`chore:`/`fix:` 접두사.
+- The core knows nothing about adapter implementations. Adding a messenger = one `MessengerAdapter` implementation.
+- No `any`. External input (messenger events, config file, provider responses) is parsed with `zod` at the boundary.
+- Long work (download → extract → translate) reports progress in the chat ("Translating… 3/7 chunks") — the UX is the product.
+- Error messages include the cause and the fix; user-facing messages are in the user's native language.
+- Commit messages: **written in English**. Task commits use `T{n}: summary`; everything else uses a `docs:` / `chore:` / `fix:` prefix.
+- All markdown documentation (root and `docs/`) is written in English. Korean appears only as product i18n data (`src/phrases/ko.ts`, `src/cli/text.ts`, `core/configMessages.ts`) and test fixtures.
 
-## 가드레일 (위반 금지)
+## Guardrails (never violate)
 
-1. **문서 내용 무저장**: 원문·번역문을 디스크에 남기지 않는다(임시 파일은 처리 직후 삭제, 전송용 파일은 전송 후 삭제). 로그에는 메타데이터만(파일명·크기·언어·소요) — **내용·본문 일부라도 로그 금지.**
-2. **게시 범위 고정**: 번역 결과는 문서가 올라온 그 대화창에만 게시한다. 다른 채팅·외부로 전달하는 코드 경로 금지.
-3. 테스트에서 **네트워크 호출 0건**: 메신저·번역기·추출기 전부 목/픽스처.
-4. API 키·봇 토큰은 로컬 설정 파일(권한 600)과 .env만. 커밋 금지, 로그 출력 금지.
-5. **비용 상한 존중**: 문서당 최대 크기·토큰 상한(config) 초과 시 번역하지 말고 요약 모드 제안 또는 거절 안내. 상한 무시 플래그 추가 금지.
-6. 스펙·설계와 충돌 시 `docs/` 먼저 수정. 출력 모드 정책 변경은 SPEC §4가 선행.
+1. **No document content on disk**: never leave source or translated text on disk (temp files are deleted right after processing, files for sending are deleted after sending). Logs carry metadata only (file name, size, language, timings) — **never log content, not even a fragment.**
+2. **Fixed posting scope**: translation results are posted only to the chat where the document arrived. No code path may forward to other chats or external destinations.
+3. **Zero network calls in tests**: messenger, translator and extractor are all mocks/fixtures.
+4. API keys and bot tokens live only in the local config file (mode 600) and `.env`. Never committed, never logged.
+5. **Respect cost caps**: when a document exceeds the per-document size/token limits (config), do not translate — offer summary mode or refuse with guidance. Never add a cap-bypass flag.
+6. When code conflicts with the spec or design, fix `docs/` first. Output-mode policy changes go through SPEC §4 before code.
 
-## 작업 방식
+## Way of working
 
-- 한 세션 = `docs/TASKS.md`의 한 태스크. 완료 기준 전부 충족 + `npm run check` 통과까지 자가 수정 루프. 스펙 모호로 막힐 때만 질문.
-- 완료 시 변경 파일·검증 결과 요약 후 종료.
+- One session = one task from `docs/TASKS.md`. Self-correct until every completion criterion is met and `npm run check` passes. Ask only when blocked by spec ambiguity.
+- On completion, summarize changed files and verification results, then stop.
 
-## 프루닝 로그
+## Pruning log
 
-격주 검토, 낡은 규칙 삭제 (`docs/WORKFLOW.md`).
+Reviewed every two weeks; stale rules are deleted (`docs/WORKFLOW.md`).
 
-- 2026-09-04: 최초 작성.
+- 2026-09-04: first version.
+- 2026-09-06: all root and docs markdown translated to English; guardrails unchanged.

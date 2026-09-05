@@ -1,177 +1,192 @@
-# 002. 프로젝트 보안 검수 결과
+# 002. Project security review results
 
-## 발견 사항 — Critical → High → Medium → Low
+> Reviewed on 2026-09-05 at commit `fda3f25`. Remediation status per item was added on 2026-09-06 (see `docs/TASKS.md`, R series). The findings below are the original review; the **Status** line at the end of each item records what was done.
 
-Critical 0건, High 3건, Medium 9건, Low 1건: 총 13건. 실행으로 확인한 동작과 조건부 공격 가능성을 구분했다. 이전 일반 검수와 겹치는 사항도 보안 영향·공격 전제·가드레일 기준으로 다시 평가했다. 실제 침해 사고나 원격 코드 실행이 확인되었다는 의미는 아니다.
+## Findings — Critical → High → Medium → Low
 
-### SEC-01. [High] 발신자 인증·권한 검사 없이 유료 작업과 전역 설정 변경 허용
+Critical 0, High 3, Medium 9, Low 1: 13 items. Behaviour confirmed by execution is distinguished from conditional attack possibilities. Items overlapping the general code review were re-evaluated for security impact, attack preconditions and the guardrails. None of this means an actual compromise or remote code execution was confirmed.
 
-- 위치: `src/adapters/telegramAdapter.ts:52-65`, `src/core/types.ts:7-19`, `src/core/pipeline.ts:350-386`, `src/cli/start.ts:73-79`.
-- 문제: Telegram이 전달한 사용자 ID와 채팅 ID를 소유자·허용 목록과 비교하지 않는다. 정규화된 이벤트에는 발신자 ID가 없고, 모든 채팅의 `/lang`·`/mode`가 단일 설정을 변경한다.
-- 공격 전제: 봇에 개인 메시지를 보내거나 봇이 있는 그룹에서 문서·명령을 보낼 수 있는 사용자. 봇 토큰을 알 필요는 없다.
-- 영향: 소유자 API 비용 무단 사용, 전역 설정 변조, 다른 채팅의 정상 번역 방해. 일반 참여자가 애플리케이션 관리 권한을 행사하는 권한 상승이며 OS 권한 상승은 아니다.
-- 근거: 합성 unknown 사용자 업데이트가 문서 핸들러와 다운로드까지 도달했다. 설정 변경 경로에는 소유자 확인이 없다. 결과의 chatId 자체는 수신 채팅으로 유지된다.
-- 권장 수정: 다운로드 전에 허용 채팅을 검사하고 관리 명령에는 발신자 ID 기반 소유자 검증을 적용한다. 허용 그룹에서 문서 제출 권한과 전역 설정 변경 권한을 분리한다. 허용 목록은 Zod 스키마에 명시하고 기본 거절 정책을 사용한다.
-- 가드레일: 2의 chatId 고정은 인증을 대신하지 않는다. 4의 비밀값을 직접 공개하지 않아도 해당 키의 사용 권한이 노출된다.
+### SEC-01. [High] Paid work and global settings changes allowed without sender authentication or authorization
 
-### SEC-02. [High] 요청 속도·누적 비용 제한 부재와 공백 비용 가드 우회
+- Location: `src/adapters/telegramAdapter.ts:52-65`, `src/core/types.ts:7-19`, `src/core/pipeline.ts:350-386`, `src/cli/start.ts:73-79`.
+- Problem: the user ID and chat ID delivered by Telegram are never compared with an owner or allow-list. Normalized events carry no sender ID, and `/lang` / `/mode` from any chat change the single config.
+- Attack precondition: a user who can send the bot a private message, or send documents/commands in a group the bot is in. The bot token is not needed.
+- Impact: unauthorized use of the owner's API spend, tampering with global settings, disruption of other chats' translations. This is an application-level privilege escalation (an ordinary participant exercising admin rights), not OS privilege escalation.
+- Evidence: a synthetic update from an unknown user reached the document handler and the download. The settings-change path has no owner check. The result's chatId itself stays the receiving chat.
+- Recommendation: check the allowed chats before downloading and apply owner verification by sender ID to admin commands. Separate document submission in allowed groups from global settings changes. Put the allow-list in the zod schema with a default-deny policy.
+- Guardrails: guardrail 2's fixed chatId does not substitute for authentication. Guardrail 4's secrets are not exposed directly, but the right to use those keys is.
+- **Status: fixed in R1** — default deny, pairing, owner-only admin commands, strict `access` schema.
 
-- 위치: `src/core/pipeline.ts:67-84,149-158,244-265,359-366`, `src/core/sections.ts:118-120`, `src/adapters/providers/openai.ts:66-74`, `src/adapters/providers/claude.ts:55-61`.
-- 문제: 글자 수 제한은 공백을 제거하지만 실제 청크·요약 입력에는 공백이 포함된다. 사용자별 속도 제한, 문서별 최대 청크 수, 일일 예산, 반복 `/full`·`/summary` 제한이 없다. OpenAI 요청에는 출력 토큰 상한도 명시하지 않는다.
-- 공격 전제: 문서 또는 재처리 명령을 제출할 수 있는 사용자. 허용 사용자만 받도록 수정해도 반복 요청 통제는 별도로 필요하다.
-- 영향: 적은 유효 문자로 다수의 요청을 발생시키거나 같은 문서를 반복 과금시킬 수 있다. 현재 실제 polling의 직렬 처리로 다른 사용자도 지연된다. SDK 기본 재시도와 파이프라인 재시도 중첩은 실패 시 요청 수를 추가로 늘린다.
-- 실행 근거: `('word' + ' '.repeat(3990)).repeat(100)`은 399,400자지만 비용 가드에서 400자로 계산되고 99개 청크가 생성되었다. 이전 검수의 목 실험에서는 Claude의 같은 청크가 최대 6회 요청되었다.
-- 권장 수정: 실제 전송 입력·출력 토큰 예산, 청크 개수 상한, 사용자·채팅·전역 rate limit과 일일 비용 제한을 적용한다. 재처리 요청도 예산에 포함하고 재시도 책임을 한 계층으로 통합한다. 콘텐츠 디스크 캐시 없이도 중복 요청 메타데이터와 짧은 cooldown으로 제어할 수 있다.
-- 가드레일: 비용 가드 5 관련. 개인정보 무저장 원칙을 해치지 않는 메타데이터 기반 제한이 필요하다.
+### SEC-02. [High] No request-rate or cumulative-cost limits, and whitespace bypasses the cost guard
 
-### SEC-03. [High] 비신뢰 문서 파서를 자원 격리 없이 실행
+- Location: `src/core/pipeline.ts:67-84,149-158,244-265,359-366`, `src/core/sections.ts:118-120`, `src/adapters/providers/openai.ts:66-74`, `src/adapters/providers/claude.ts:55-61`.
+- Problem: the character limit strips whitespace, but the real chunk and summary input includes it. There is no per-user rate limit, per-document maximum chunk count, daily budget or limit on repeated `/full` / `/summary`. OpenAI requests specify no output-token cap.
+- Attack precondition: a user who can submit documents or re-run commands. Even after restricting to allowed users, repeated-request control is a separate need.
+- Impact: many requests from few effective characters, or repeated billing for the same document. Under the current serial polling, other users are delayed too. Nested SDK and pipeline retries further multiply request counts on failure.
+- Evidence: `('word' + ' '.repeat(3990)).repeat(100)` is 399,400 characters but counted as 400 by the cost guard and produced 99 chunks. In the earlier mock experiment the same Claude chunk was requested up to six times.
+- Recommendation: apply budgets on real transmitted input/output tokens, a chunk-count cap, per-user/chat/global rate limits and a daily cost limit. Count re-run requests against the budget too and consolidate retry responsibility in one layer. Duplicate-request metadata and a short cool-down are possible without any content disk cache.
+- Guardrails: related to cost guard 5. Metadata-based limits are needed that do not harm the no-content-storage principle.
+- **Status: fixed in R2** — whitespace-inclusive measure, chunk cap, per-chat hourly limit, daily budget, SDK retries 0, `max_completion_tokens`.
 
-- 위치: `src/adapters/extractors/docx.ts:36-44`, `src/adapters/extractors/pdf.ts:12-25`, `src/core/pipeline.ts:135-149`.
-- 문제: 업로드 압축 크기만 제한하고 DOCX의 압축 해제량·XML 크기·항목 수, PDF의 페이지·객체 수, CPU·메모리·처리 시간에는 애플리케이션 제한이 없다. 추출 텍스트 상한은 파싱 완료 후 검사한다. DOCX는 기본 HTML 변환 과정에서 결국 버릴 이미지도 처리한다.
-- 공격 전제: 제한 이하 크기의 복잡하거나 높은 압축률을 갖는 파일 업로드.
-- 영향: 봇 프로세스의 메모리 고갈·CPU 점유로 서비스 거부가 가능할 위험이 있다. try/catch는 프로세스 OOM이나 CPU 점유 시간을 통제하지 못한다.
-- 실행 근거: 기존 DOCX를 메모리에서 변형한 제한적 실험에서 압축 파일 8,260바이트가 추출 텍스트 250,000자로 확장되었다. 이는 확대와 사후 검사 순서를 입증하며, 실제 OOM 공격은 실행하지 않았다. Mammoth도 병적인 CPU·메모리 사용 가능성과 별도 실행·timeout을 안내한다. [Mammoth 보안 안내](https://github.com/mwilliamson/mammoth.js#security)
-- 권장 수정: DOCX ZIP 엔트리·압축 해제 예산과 PDF 페이지·출력량 상한을 두고, 비밀값을 전달하지 않는 제한된 별도 프로세스 등에서 파싱한다. 기한 초과 시 실제 작업을 종료하고 이미지 변환을 비활성화한다. 같은 프로세스에서 Promise timeout만 두는 것으로 CPU 작업이 중단되지는 않는다.
-- 가드레일: 격리 과정에서도 원문을 디스크에 남기지 않으며 불가피한 임시 파일은 즉시 정리해야 한다(1). 파서에 API 키 환경변수를 상속하지 않는다(4).
+### SEC-03. [High] Untrusted document parsers run without resource isolation
 
-### SEC-04. [Medium] SDK 디버그 로그가 애플리케이션의 본문 무로그 정책을 우회
+- Location: `src/adapters/extractors/docx.ts:36-44`, `src/adapters/extractors/pdf.ts:12-25`, `src/core/pipeline.ts:135-149`.
+- Problem: only the compressed upload size is limited; there is no application limit on DOCX decompressed size, XML size or entry count, PDF page or object counts, CPU, memory or processing time. The extracted-text cap is checked only after parsing completes. DOCX processes images during the default HTML conversion even though they are discarded.
+- Attack precondition: uploading a complex or highly compressed file under the size limit.
+- Impact: risk of denial of service through memory exhaustion or CPU occupation of the bot process. try/catch cannot control process OOM or CPU time.
+- Evidence: in a limited experiment modifying an existing DOCX in memory, an 8,260-byte archive expanded to 250,000 characters of extracted text. This demonstrates the expansion and the post-hoc check order; no actual OOM attack was run. Mammoth also documents pathological CPU/memory usage and recommends separate execution with a timeout. [Mammoth security note](https://github.com/mwilliamson/mammoth.js#security)
+- Recommendation: set DOCX ZIP entry and decompression budgets and PDF page/output caps, and parse in a restricted separate process that receives no secrets. Terminate the real work on deadline and disable image conversion. A Promise timeout in the same process does not stop CPU work.
+- Guardrails: even with isolation, source text must not be left on disk and any unavoidable temp file must be cleaned up immediately (1). Parsers must not inherit API-key environment variables (4).
+- **Status: partially fixed in R4** — ZIP entry/decompression budget, PDF page cap, images never decoded, 60-second deadline. Out-of-process isolation with CPU/memory limits is queued for v0.2.
 
-- 위치: `src/adapters/providers/claude.ts:55-61,73-82`, `src/adapters/configStore.ts:98-102`, `tests/privacy-audit.test.ts:108-126,165-174`.
-- 문제: Claude SDK 생성 시 `logLevel`과 안전한 logger를 고정하지 않는다. 설치된 SDK는 `ANTHROPIC_LOG`를 읽고 자체 console에 요청·응답 정보를 출력한다. 프로젝트의 오류 정규화 이전에 이 로그가 발생한다.
-- 발생 조건: 환경변수 `ANTHROPIC_LOG=debug`가 설정되고 서버·프록시 오류 본문 등이 문서 데이터를 포함할 때. 일반 로그 수집기의 직렬화 방식도 노출 범위에 영향을 준다.
-- 실행 근거: 합성 문서 표식을 포함한 400 text/plain 응답을 목으로 주입하자 SDK의 `response error` 로그 `message`에 표식이 그대로 출력되었다. 정상 JSON 응답에 대한 기본 console 포맷 실험에서는 중첩 본문 표식이 출력되지 않았으므로 정상 요청이 항상 본문을 노출한다고 단정하지 않는다. API 키 헤더는 SDK에서 `***`로 가려졌다.
-- 영향: 가드레일 1의 본문 무로그 보장이 환경과 오류 형태에 따라 깨진다. 기존 프라이버시 테스트는 FakeTranslator를 사용해 실제 SDK 로그 경로를 검사하지 않는다.
-- 권장 수정: SDK 로그를 명시적으로 끄거나 메타데이터 허용 목록 기반 logger를 주입한다. 실제 SDK와 목 fetch를 조합해 debug 환경, 비JSON 오류, 본문을 반사하는 오류의 stdout/stderr 누출을 검사한다.
-- 가드레일: 1의 재현 가능한 조건부 위반. 이 실험에서 실제 API 키 노출은 확인하지 않았다.
+### SEC-04. [Medium] SDK debug logs bypass the application's no-content logging policy
 
-### SEC-05. [Medium] CWD 환경변수로 Claude 전송 대상을 바꾸고 API 키까지 전달 가능
+- Location: `src/adapters/providers/claude.ts:55-61,73-82`, `src/adapters/configStore.ts:98-102`, `tests/privacy-audit.test.ts:108-126,165-174`.
+- Problem: the Claude SDK client is created without pinning `logLevel` or a safe logger. The installed SDK reads `ANTHROPIC_LOG` and prints request/response information to its own console — before the project's error normalization.
+- Trigger: `ANTHROPIC_LOG=debug` set in the environment and a server/proxy error body that contains document data. Log collectors' serialization also affects the exposure.
+- Evidence: injecting a 400 text/plain response containing a synthetic document marker printed the marker verbatim in the SDK's `response error` log `message`. In the default console-format experiment for a normal JSON response, nested body markers were not printed, so normal requests are not asserted to always expose content. The API-key header was masked as `***` by the SDK.
+- Impact: guardrail 1's no-content-logging guarantee breaks depending on the environment and error shape. The existing privacy test uses FakeTranslator and does not exercise the real SDK log path.
+- Recommendation: turn SDK logging off explicitly or inject a metadata-allow-list logger. Combine the real SDK with a mock fetch to check stdout/stderr leakage in debug environments, non-JSON errors and body-reflecting errors.
+- Guardrails: a reproducible conditional violation of 1. No real API-key exposure was observed in this experiment.
+- **Status: fixed in R3** — `logLevel: "off"`; test with the real SDK, `ANTHROPIC_LOG=debug` and a body-reflecting non-JSON 400.
 
-- 위치: `src/adapters/configStore.ts:98-102`, `src/cli/index.ts:89,104,128`, `src/adapters/providers/claude.ts:55-61`.
-- 문제: 현재 디렉터리의 `.env`를 전체 로딩하고 SDK의 baseURL을 고정하지 않는다. 설치된 SDK는 `ANTHROPIC_BASE_URL`을 자동 적용한다. 프로젝트 설정 스키마가 통제하지 않는 외부 전송 경로다.
-- 공격 전제: 사용자가 실행하는 디렉터리의 `.env` 또는 실행 환경을 공격자가 통제해야 한다. 문서 업로드나 채팅만으로 환경변수를 바꾸는 경로는 확인하지 않았다. 의도적으로 설정한 신뢰 프록시는 공격으로 간주하지 않는다.
-- 실행 근거: 합성 환경값 `https://review-sink.invalid`와 목 fetch를 사용하자 요청 URL이 해당 호스트의 `/v1/messages`가 되고 합성 API 키도 `x-api-key`에 붙었다. 실제 외부 호스트로 전송하지 않았다.
-- 영향: 신뢰하지 않는 작업 폴더에서 실행하면 문서와 소유자의 키가 임의 서버로 전달될 수 있다. 스키마에 표시되는 provider가 Claude라는 사실만으로 실제 목적지를 보장할 수 없다.
-- 권장 수정: `.env`를 신뢰 설정 위치에서만 읽거나 필요한 키만 선택적으로 사용한다. 공식 목적지를 명시하고 프록시는 별도 검증된 설정으로 노출한다. HTTPS와 허용 origin을 검사하고 리디렉션도 목적지 정책을 따르게 한다.
-- 가드레일: 2의 외부 전달 제한과 4의 비밀값 보호에 관련된 조건부 위험.
+### SEC-05. [Medium] CWD environment variables can redirect Claude traffic and carry the API key along
 
-### SEC-06. [Medium] 손상된 설정의 JSON 오류가 비밀값 일부를 출력
+- Location: `src/adapters/configStore.ts:98-102`, `src/cli/index.ts:89,104,128`, `src/adapters/providers/claude.ts:55-61`.
+- Problem: the entire `.env` in the current directory is loaded and the SDK's baseURL is not pinned. The installed SDK applies `ANTHROPIC_BASE_URL` automatically — an outbound path the project's config schema does not control.
+- Attack precondition: the attacker must control the `.env` in the directory the user runs from, or the execution environment. No path changing environment variables via document upload or chat was found. A deliberately configured trusted proxy is not considered an attack.
+- Evidence: with the synthetic value `https://review-sink.invalid` and a mock fetch, the request URL became that host's `/v1/messages` and the synthetic API key was attached as `x-api-key`. Nothing was sent to a real external host.
+- Impact: running from an untrusted working folder can send documents and the owner's key to an arbitrary server. The provider shown as Claude in the schema does not guarantee the real destination.
+- Recommendation: read `.env` only from trusted locations or import only the required keys. Pin the official destination and expose proxies through separately validated configuration. Enforce HTTPS and allowed origins, and apply the destination policy to redirects as well.
+- Guardrails: a conditional risk related to 2 (external forwarding) and 4 (secret protection).
+- **Status: fixed in R3** — `.env` allow-listed to the three secret keys; `baseURL` pinned to the official endpoint.
 
-- 위치: `src/adapters/configStore.ts:21-22,35-38`, `src/core/configMessages.ts:145-154`, `src/cli/status.ts:24-29`.
-- 문제: 파서 오류 원문을 CLI 설명에 삽입한다. Node의 JSON 파싱 오류는 잘못된 입력 일부를 포함할 수 있다.
-- 발생 조건: 키·토큰이 있는 설정을 잘못 편집하고 `start`·`status` 등으로 로딩할 때. 원격 업로드만으로 설정 JSON을 쓰는 경로는 없다.
-- 실행 근거: 합성 입력 `literal:FAKE_SECRET_FOR_REVIEW`에서 오류 출력에 `literal:FA`가 나타났다. 실제 사용자 설정과 키는 읽거나 사용하지 않았다.
-- 영향: 터미널·지원 로그에 비밀값의 일부가 남는다. 정상 설정의 `redactSecretRef`는 오류 경로를 보호하지 않는다. 일반 검수의 동일 항목보다 공격 전제를 좁혀 Medium으로 평가했다.
-- 권장 수정: JSON 오류 원문을 버리고 고정 오류 코드와 안전한 위치 정보만 제공한다. Zod 오류 출력도 필드 허용 목록을 사용하고 사용자 입력을 무조건 안전한 detail로 간주하지 않는다.
-- 가드레일: 4의 오류 출력 보호 누락.
+### SEC-06. [Medium] The JSON error for a corrupted config prints part of a secret
 
-### SEC-07. [Medium] 비밀 설정의 기존 권한·소유권·심볼릭 링크를 검증하지 않음
+- Location: `src/adapters/configStore.ts:21-22,35-38`, `src/core/configMessages.ts:145-154`, `src/cli/status.ts:24-29`.
+- Problem: the parser's error text is inserted into the CLI explanation. Node's JSON parse errors can include part of the invalid input.
+- Trigger: editing a config that contains keys/tokens incorrectly and loading it with `start`, `status`, etc. There is no path that writes config JSON from a remote upload.
+- Evidence: with the synthetic input `literal:FAKE_SECRET_FOR_REVIEW`, `literal:FA` appeared in the error output. No real user config or key was read or used.
+- Impact: secret fragments remain in terminal or support logs. `redactSecretRef` on the normal path does not protect the error path. Rated Medium because the attack precondition is narrower than in the general review's identical item.
+- Recommendation: discard the parser text and provide only a fixed error code and safe position information. Use field allow-lists for zod error output as well and do not treat user input as unconditionally safe detail.
+- Guardrails: missing error-output protection under 4.
+- **Status: fixed in R3** — fixed `syntax` code; regression test.
 
-- 위치: `src/adapters/configStore.ts:26-30,55-61,69-71`, `src/cli/status.ts:33-35`.
-- 문제: 읽을 때 파일 모드·소유권·링크 여부를 검사하지 않는다. 저장은 기존 경로에 먼저 쓰고 이후 chmod한다. `mode: 600`은 기존 파일의 쓰기 전 권한을 바꾸지 않으며 기존 디렉터리 권한도 강화하지 않는다.
-- 공격 전제: 다른 로컬 계정이 읽을 수 있는 기존 설정, 또는 공격자가 경로·부모 디렉터리를 변경할 수 있는 배치. 기본 사용자 전용 700 디렉터리가 제대로 생성·유지되는 경우 위험은 낮아진다.
-- 영향: 느슨한 권한의 설정을 조용히 사용하거나 기존 권한 상태에서 비밀값을 기록한다. 경로를 바꿀 수 있는 공격자는 심볼릭 링크를 통한 의도하지 않은 덮어쓰기나 비밀값 노출을 유도할 수 있다. 임의 원격 파일 쓰기나 root 권한 획득이 확인된 것은 아니다.
-- 근거: 파일 열기·쓰기 순서의 정적 분석. 로컬 계정 간 공격과 실제 설정 변경은 수행하지 않았다.
-- 권장 수정: 설정 파일의 소유자·타입·권한 및 부모 디렉터리를 검증한다. 안전하게 만든 같은 디렉터리 임시 파일에 600으로 기록한 뒤 원자적으로 교체하며 링크 경쟁도 방어한다. 일반 사용자 권한으로 실행한다.
-- 가드레일: 4의 권한 600 요구를 생성 시점뿐 아니라 읽기·교체 전체 수명에 적용해야 한다.
+### SEC-07. [Medium] Existing permissions, ownership and symbolic links of the secret config are not verified
 
-### SEC-08. [Medium] 다운로드 메타데이터를 신뢰하고 실제 수신 바이트를 제한하지 않음
+- Location: `src/adapters/configStore.ts:26-30,55-61,69-71`, `src/cli/status.ts:33-35`.
+- Problem: file mode, ownership and link status are not checked on read. Saves write to the existing path first and chmod afterwards. `mode: 600` does not change an existing file's permissions before writing, nor does it tighten an existing directory.
+- Attack precondition: an existing config readable by other local accounts, or a layout where the attacker can change the path or parent directory. With a properly created and maintained user-only 700 directory the risk is low.
+- Impact: a loosely-permissioned config is used silently, or the secret is written under the existing permission state. An attacker who can change the path could induce unintended overwrites or secret exposure through symbolic links. Arbitrary remote file writes or root access were not confirmed.
+- Evidence: static analysis of the open/write order. No cross-account attack or real config change was performed.
+- Recommendation: verify the config file's owner, type and permissions and the parent directory. Write to a safely created temp file in the same directory with mode 600 and replace atomically, defending against link races. Run as an ordinary user.
+- Guardrails: 4's mode-600 requirement must apply to the whole lifetime — reading and replacing, not just creation.
+- **Status: fixed in R3** — `lstat` checks (symlink, non-regular, permission bits) and atomic replacement.
 
-- 위치: `src/adapters/telegramAdapter.ts:76,86-96`, `src/core/pipeline.ts:135-136`.
-- 문제: `file_size`가 없으면 0으로 취급한다. getFile 응답의 크기, Content-Length, 스트리밍 누적 크기를 확인하지 않고 전체 `arrayBuffer()`를 만든다. 파이프라인도 실제 bytes 길이를 재검사하지 않는다.
-- 공격 전제: 누락·부정확한 플랫폼 메타데이터 또는 비정상 다운로드 응답. 일반 Telegram 사용자가 `file_size`를 마음대로 위조할 수 있다고 가정하지 않는다. Telegram 자체 다운로드 제한도 별도로 존재한다.
-- 실행 근거: 어댑터 한도를 8바이트로 설정하고 file_size가 없는 합성 업데이트와 32바이트 목 응답을 주입했을 때 32바이트가 그대로 반환되었다. getFile에 32바이트가 명시돼 있어도 거절하지 않았다.
-- 영향: 애플리케이션 자체 크기 불변식이 보장되지 않아 비정상 응답에서 과도한 메모리를 소비할 수 있다.
-- 권장 수정: 메타데이터는 조기 거절의 보조 수단으로 쓰고 실제 스트림 누적 바이트에서 강제 중단한다. 파이프라인에서도 길이를 검증하고 음수·비정상 수치·메타데이터 누락을 명확히 처리한다.
+### SEC-08. [Medium] Download metadata is trusted and the actual received bytes are not limited
 
-### SEC-09. [Medium] 요청 기한·취소 부재가 서비스 거부 영향을 확대
+- Location: `src/adapters/telegramAdapter.ts:76,86-96`, `src/core/pipeline.ts:135-136`.
+- Problem: a missing `file_size` is treated as 0. The getFile response size, Content-Length and the streamed size are not checked before the whole `arrayBuffer()` is built. The pipeline does not re-check the real byte length either.
+- Attack precondition: missing or inaccurate platform metadata, or an abnormal download response. An ordinary Telegram user is not assumed to forge `file_size` freely. Telegram has its own download limits.
+- Evidence: with the adapter limit set to 8 bytes, a synthetic update without file_size and a 32-byte mock response, 32 bytes were returned unchanged. Even with 32 bytes declared in getFile, it was not rejected.
+- Impact: the application's own size invariant is not guaranteed, so excessive memory can be consumed on abnormal responses.
+- Recommendation: use metadata only as an early-rejection aid and enforce the cutoff on the actual accumulated stream bytes. Re-verify the length in the pipeline and handle negative, abnormal or missing values explicitly.
+- **Status: fixed in R4** — getFile `file_size`, `content-length` and streaming accumulation are all checked; the pipeline re-checks the byte length.
 
-- 위치: `src/adapters/providers/openai.ts:46-54,77-84`, `src/adapters/telegramAdapter.ts:63-65,94-96,138-145`, `src/cli/start.ts:94-105`.
-- 문제: OpenAI fetch와 Telegram 파일 다운로드의 전체 기한·본문 수신량·종료 취소 신호가 없다. 실제 기본 long polling은 전체 문서 처리를 기다린 후 다음 업데이트를 처리한다.
-- 공격 전제: 장시간 응답, 응답 본문을 끝내지 않는 프록시·서버, 오래 걸리는 업로드 처리. 원격 사용자가 정상 API 서버의 응답을 통제할 수 있다는 뜻은 아니다.
-- 영향: 한 작업의 장기 대기가 다른 채팅과 정상 종료까지 지연시킨다. 런타임 자체의 네트워크 제한이 있더라도 문서 작업 전체의 서비스 기한은 보장되지 않는다.
-- 근거: 요청과 종료 경로, 설치된 grammY의 순차 업데이트 처리 확인. 네트워크를 무기한 잡아두는 실험은 하지 않았다.
-- 권장 수정: AbortSignal 기반 요청·본문 수신 기한, 최대 응답 크기, 문서 전체 deadline을 적용하고 종료 시 취소한다. 채팅별 순서를 유지하면서 전역 동시 실행 수와 대기열을 제한한다.
+### SEC-09. [Medium] Missing request deadlines and cancellation amplify denial-of-service impact
 
-### SEC-10. [Medium] 문서의 지시문과 모델 결과에 대한 프롬프트 인젝션 방어가 제한적
+- Location: `src/adapters/providers/openai.ts:46-54,77-84`, `src/adapters/telegramAdapter.ts:63-65,94-96,138-145`, `src/cli/start.ts:94-105`.
+- Problem: OpenAI fetch and Telegram file downloads have no overall deadline, body-size limit or shutdown cancellation signal. The real default long polling waits for the whole document job before processing the next update.
+- Attack precondition: long responses, a proxy/server that never finishes the body, long-running upload processing. This does not mean a remote user controls a legitimate API server's responses.
+- Impact: one job's long wait delays other chats and clean shutdown. Even with runtime network limits, the service deadline of the whole document job is not guaranteed.
+- Evidence: the request and shutdown paths, and the installed grammY's sequential update processing. No experiment holding the network indefinitely was run.
+- Recommendation: apply AbortSignal-based request and body deadlines, a maximum response size and a per-document deadline, and cancel on shutdown. Limit global concurrency and queue length while keeping per-chat order.
+- **Status: fixed in R4 and R5** — deadlines and byte caps (R4); non-blocking dispatch, concurrency cap and drain (R5).
 
-- 위치: `src/core/prompts.ts:25-36,40-53`, `src/adapters/providers/claude.ts:66-71,84-94`, `src/adapters/providers/openai.ts:68-89`, `src/core/pipeline.ts:266-275,313-336`.
-- 문제: 문서가 user 메시지의 전체 내용으로 들어간다. system 역할 분리는 있지만 문서 안의 명령은 실행 대상이 아닌 데이터라는 명시적 규칙이 없고, 모델이 반환한 비어 있지 않은 텍스트는 사실상 그대로 번역 결과로 게시된다.
-- 공격 전제: 공격자가 문서의 지시문·숨은 텍스트를 작성할 수 있고 모델이 그 지시를 따르는 경우. 모델 행동은 확률적이며 이번 검수에서 실제 모델 우회 성공은 시험하지 않았다.
-- 영향: 조항·계좌·링크 변조, 중요 문장 누락, 봇이 보증하는 것처럼 보이는 피싱 문구 등 결과 무결성 위험. 문서 내용만으로 shell 실행, 환경변수 읽기, 다른 chatId 선택은 할 수 없으며 그런 도구는 모델에 제공되지 않는다.
-- 근거: prompt 구성 및 출력 게시 경로의 정적 분석. 이를 확정적인 API 키 탈취나 원격 코드 실행으로 분류하지 않는다.
-- 권장 수정: 문서 내용을 신뢰하지 않는 데이터로 표시하고 내부 지시·역할 사칭을 따르지 않도록 명시한다. 구분자는 보조 수단으로만 사용한다. 원문 대비 숫자·URL·조항 누락을 검사하고 이상 결과를 재검토 대상으로 처리한다. 모델의 도구·목적지 결정 권한은 계속 부여하지 않는다.
-- 가드레일: 2의 게시 대상은 모델 출력과 독립적으로 유지되고 있으며 이 제한을 보존해야 한다.
+### SEC-10. [Medium] Limited defence against instructions inside documents and model output
 
-### SEC-11. [Medium] 모델·문서 URL의 링크 미리보기를 차단하지 않음
+- Location: `src/core/prompts.ts:25-36,40-53`, `src/adapters/providers/claude.ts:66-71,84-94`, `src/adapters/providers/openai.ts:68-89`, `src/core/pipeline.ts:266-275,313-336`.
+- Problem: the document is the entire user message. The system role is separated, but there is no explicit rule that commands inside the document are data rather than instructions, and any non-empty text returned by the model is effectively posted as the translation.
+- Attack precondition: the attacker can author instructions or hidden text in the document and the model follows them. Model behaviour is probabilistic; no actual model bypass was attempted in this review.
+- Impact: integrity risks such as altered clauses, accounts or links, omitted key sentences, or phishing text that appears endorsed by the bot. Document content alone cannot execute shell commands, read environment variables or choose another chatId, and no such tools are given to the model.
+- Evidence: static analysis of prompt construction and the output posting path. Not classified as definite API-key theft or remote code execution.
+- Recommendation: mark document content as untrusted data and instruct the model not to follow internal instructions or role impersonation. Use delimiters only as an aid. Check for missing numbers, URLs or clauses against the source and flag anomalous results for review. Continue to grant the model no authority over tools or destinations.
+- Guardrails: 2's posting target remains independent of model output and must stay so.
+- **Status: fixed in R6** — both prompts state that the user message is data, not instructions; the model still has no tools or destination authority.
 
-- 위치: `src/adapters/telegramAdapter.ts:109-117`, `src/core/pipeline.ts:319-322`, `src/core/prompts.ts:29`.
-- 문제: 텍스트 게시 요청에 `link_preview_options: { is_disabled: true }`가 없다. 비신뢰 문서와 모델이 반환하는 URL도 이 경로로 전송된다.
-- 공격 전제: 외부 URL이 결과에 포함되고 Telegram이 해당 링크의 미리보기를 생성하는 경우. 프롬프트 인젝션으로 문서 내용을 URL에 포함시키려는 시도와 결합될 수 있다.
-- 영향: 외부 링크 접근·추적이 발생할 수 있고 URL에 포함된 값이 목적지에 노출될 수 있다. 직접 chatId는 유지되지만 부수적인 외부 접근을 제한하지 않는다. 애플리케이션 서버의 직접 SSRF나 실제 유출을 입증한 것은 아니다.
-- 실행 근거: 합성 URL을 postText로 보낸 목 API payload에 미리보기 비활성화 옵션이 없었다. Telegram 공식 API는 미리보기 URL이 생략되면 메시지의 첫 URL을 사용하고 `is_disabled`로 미리보기를 끌 수 있다고 명시한다. 실제 외부 미리보기 호출은 시험하지 않았다. [Telegram LinkPreviewOptions](https://core.telegram.org/bots/api#linkpreviewoptions)
-- 권장 수정: 자동 게시 메시지의 미리보기를 기본 비활성화한다. 문서 파일에 포함된 Markdown 이미지·HTML·URL 역시 비신뢰 데이터로 취급하고 향후 뷰어를 만들 때 네트워크 로딩과 실행 가능한 HTML을 제한한다. 원문 URL을 무조건 삭제해 번역 내용을 손상시키지는 않는다.
-- 가드레일: 2의 게시 범위 외 간접 외부 접근에 대한 보완 사항.
+### SEC-11. [Medium] Link previews for URLs from the model or the document are not disabled
 
-### SEC-12. [Medium] 외부 응답·이벤트 경계의 런타임 스키마 검증 누락
+- Location: `src/adapters/telegramAdapter.ts:109-117`, `src/core/pipeline.ts:319-322`, `src/core/prompts.ts:29`.
+- Problem: text posts do not set `link_preview_options: { is_disabled: true }`. URLs from untrusted documents and from the model travel this path.
+- Attack precondition: an external URL ends up in the result and Telegram generates a preview for it. Can combine with a prompt-injection attempt to embed document content in a URL.
+- Impact: external link access and tracking, and values embedded in the URL may be exposed to the destination. The direct chatId is kept, but incidental external access is not restricted. Direct SSRF from the application server or an actual exfiltration was not demonstrated.
+- Evidence: the mock API payload for a synthetic URL sent via postText had no preview-disable option. The official Telegram API states that if the preview URL is omitted, the first URL in the message is used, and previews can be turned off with `is_disabled`. No real external preview call was tested. [Telegram LinkPreviewOptions](https://core.telegram.org/bots/api#linkpreviewoptions)
+- Recommendation: disable previews by default for automatically posted messages. Treat Markdown images, HTML and URLs inside document files as untrusted data as well, and restrict network loading and executable HTML if a viewer is built later. Do not delete source URLs unconditionally, which would damage the translation.
+- Guardrails: a complementary item to 2 regarding indirect external access outside the posting scope.
+- **Status: fixed in R6** — `link_preview_options.is_disabled` on every text post.
 
-- 위치: `src/adapters/providers/openai.ts:22-24,77-89`, `src/adapters/providers/claude.ts:84-93`, `src/adapters/telegramAdapter.ts:72-96`, `src/core/config.ts:64-83`.
-- 문제: 설정은 Zod로 검증하지만 OpenAI JSON은 타입 단언만 하고 Claude 응답·Telegram 이벤트도 필요한 구조·크기 불변식을 런타임에서 별도 검증하지 않는다. TypeScript·SDK 반환 타입이 비정상 네트워크 데이터를 검증해 주지는 않는다. 설정의 알 수 없는 키는 오류 없이 제거된다.
-- 공격 전제: 비정상 API·프록시 응답이나 통합 오류. 외부 사용자에게 provider 응답 직접 제어권이 있다고 가정하지 않는다.
-- 영향: `null`, 잘못된 content 타입 등이 예상된 ProviderError를 벗어나 TypeError를 발생시키고 정상 재시도 정책을 깨뜨린다. 과도하게 큰 출력도 수신 이후에야 처리한다. 사용자가 임의로 `allowedChatIds`를 추가해 보호된다고 오해해도 실제로는 아무 효과가 없다.
-- 근거: 이전 실행 검수에서 200 응답 `null`·숫자 content가 모두 TypeError를 발생시켰다. 이번 검수에서 설정에 `allowedChatIds`를 추가하면 파싱 성공 후 제거됨을 확인했다. 이는 허용 목록 기능이 존재한다는 의미가 아니다.
-- 권장 수정: 외부 응답에 Zod 스키마와 응답 크기 상한을 적용하고 실패를 안전한 오류 코드로 통일한다. 이벤트의 ID·크기·파일 메타데이터를 검증한다. 보안 설정은 명시적으로 정의하고 알 수 없는 키를 거절해 잘못된 보호 설정을 조기에 알린다.
+### SEC-12. [Medium] Missing runtime schema validation at external response and event boundaries
 
-### SEC-13. [Low] 사용자 지정 설정 경로의 비밀 파일은 Git 제외 규칙 밖에 있음
+- Location: `src/adapters/providers/openai.ts:22-24,77-89`, `src/adapters/providers/claude.ts:84-93`, `src/adapters/telegramAdapter.ts:72-96`, `src/core/config.ts:64-83`.
+- Problem: config is validated with Zod, but OpenAI JSON is only type-asserted and Claude responses / Telegram events are not separately validated at runtime for the required structure and size invariants. TypeScript and SDK return types do not validate abnormal network data. Unknown config keys are stripped without error.
+- Attack precondition: abnormal API/proxy responses or integration errors. External users are not assumed to control provider responses directly.
+- Impact: `null`, wrong content types, etc. escape the expected ProviderError as TypeErrors and break the normal retry policy. Excessively large output is handled only after reception. A user who adds `allowedChatIds` to the config and believes they are protected gets no effect.
+- Evidence: in the earlier execution review, 200 responses with `null` or numeric content both raised TypeErrors. In this review, adding `allowedChatIds` to the config parsed successfully and was removed. This does not mean an allow-list feature existed.
+- Recommendation: apply Zod schemas and response-size caps to external responses and unify failures as safe error codes. Validate event IDs, sizes and file metadata. Define security settings explicitly and reject unknown keys so a wrong protective setting is noticed early.
+- **Status: fixed in R1 and R4** — strict config schemas (R1); zod-validated OpenAI responses, Claude shape guard, byte caps (R4).
 
-- 위치: `.gitignore:12-15`, `src/cli/index.ts:79-83`, `src/cli/init.ts:208-213`, `src/adapters/configStore.ts:49-60`.
-- 문제: `.env` 계열은 제외하지만 저장소 내부의 `.msg-agent/config.json` 같은 사용자 지정 비밀 설정 경로는 제외하지 않는다. CLI의 `--config`는 저장소 내부 경로도 허용하고 literal 비밀값을 저장할 수 있다.
-- 발생 조건: 사용자가 기본 홈 경로 대신 저장소 안의 설정 경로를 선택한 뒤 파일을 커밋하는 경우.
-- 영향: `git add`로 키·토큰을 실수로 커밋할 수 있다. 기본 홈 디렉터리 설정은 저장소 밖에 있고 이번 검수에서 실제 키 커밋을 발견한 것은 아니다.
-- 근거: `git check-ignore .msg-agent/config.json config.json`에서 두 경로 모두 제외되지 않았다. 추적된 환경 파일은 값이 비어 있는 `.env.example`이다.
-- 권장 수정: 프로젝트 전용 로컬 설정 디렉터리를 Git에서 제외하고 저장소 안에 literal 설정을 저장할 때 명확히 안내한다. CI·커밋 전 secret scanning을 추가하고 운영에는 env 참조를 우선한다. 광범위하게 모든 JSON을 제외하지 않는다.
-- 가드레일: 4의 커밋 방지를 위한 누락된 보조 통제.
+### SEC-13. [Low] Secret files at a custom config path are outside the Git exclusion rules
 
-## 가드레일 1·2·4 판정
+- Location: `.gitignore:12-15`, `src/cli/index.ts:79-83`, `src/cli/init.ts:208-213`, `src/adapters/configStore.ts:49-60`.
+- Problem: `.env` variants are excluded, but a user-chosen secret config path inside the repository such as `.msg-agent/config.json` is not. The CLI's `--config` accepts paths inside the repository and can store literal secrets there.
+- Trigger: the user chooses a config path inside the repository instead of the default home path and then commits the file.
+- Impact: keys/tokens can be committed accidentally with `git add`. The default home-directory config is outside the repository and no real key commit was found in this review.
+- Evidence: `git check-ignore .msg-agent/config.json config.json` excluded neither path. The tracked environment file is `.env.example` with empty values.
+- Recommendation: exclude the project-local config directory from Git and warn clearly when literal config is stored inside the repository. Add secret scanning in CI or pre-commit, and prefer env references in operation. Do not exclude all JSON broadly.
+- Guardrails: a missing supplementary control for 4's commit prevention.
+- **Status: fixed in R3** — `.msg-agent/` added to `.gitignore`; `prepublishOnly` tarball check added later as an extra control.
 
-| 가드레일 | 확인된 보호 | 남은 문제·검증 한계 |
+## Verdict on guardrails 1, 2 and 4
+
+| Guardrail | Confirmed protection | Remaining issues and verification limits (at review time) |
 | --- | --- | --- |
-| 1. 본문 디스크·로그 무저장 | 운영 소스의 파일 쓰기는 configStore에 집중된다. 추출은 메모리 bytes, 전송 파일은 InputFile(bytes)이며 자체 본문 캐시 파일이 없다. 애플리케이션 오류 로그는 주로 오류명·코드만 남긴다. | SEC-04의 SDK 로그 경로는 기존 감사 밖이다. 현재 프라이버시 테스트는 TXT/MD와 FakeTranslator 중심이므로 모든 의존성·운영 환경에서의 무저장을 입증하지 않는다. 메타데이터 파일명·chatId 로그는 가드레일상 허용되지만 운영 보존 기간은 별도로 정할 필요가 있다. |
-| 2. 원래 대화창에만 게시 | `pipeline.ts:313-344`의 모든 결과 게시가 전달받은 chatId를 사용한다. 모델 출력이 chatId로 해석되는 경로는 없으며 `/full`·`/summary`도 같은 chatId의 마지막 문서만 찾는다. | SEC-01의 접근 제어, SEC-05의 전송 대상, SEC-11의 링크 미리보기 위험이 남는다. `message_thread_id`가 보존되지 않으므로 포럼 토픽 격리까지 보장하지 않는다. 토픽을 별도 접근 권한 경계라고 가정하지는 않았다. |
-| 4. 키·토큰 보호 | 비밀값 입력은 password 형식, 정상 status의 literal 값은 마스킹, env 참조 지원, 새 기본 설정은 600/디렉터리 700, `.env` 제외 규칙이 있다. | SEC-05·06·07·13의 목적지·오류 출력·기존 권한·커밋 방지 문제. 실제 홈 설정·실제 환경변수 값을 조사하거나 보고서에 복사하지 않았다. |
+| 1. No content on disk or in logs | Production file writes are concentrated in configStore. Extraction works on in-memory bytes, sent files are InputFile(bytes), and there is no content cache file. Application error logs mostly carry only error names/codes. | SEC-04's SDK log path was outside the existing audit. The privacy test centres on TXT/MD and FakeTranslator, so it does not prove no-storage across every dependency and operating environment. Logging file names and chatIds as metadata is allowed by the guardrail, but an operational retention period should be defined separately. |
+| 2. Post only to the original chat | Every result post in `pipeline.ts:313-344` uses the received chatId. No path interprets model output as a chatId, and `/full` / `/summary` look up only the same chat's last document. | SEC-01 access control, SEC-05 destination and SEC-11 link-preview risks remained. `message_thread_id` is not preserved, so forum-topic isolation is not guaranteed; topics were not assumed to be a separate access boundary. |
+| 4. Key and token protection | Secret input uses password prompts, literal values are masked in normal status, env references are supported, new default config is 600 with a 700 directory, and `.env` is excluded. | Destination, error output, existing permission and commit-prevention issues in SEC-05/06/07/13. The real home config and real environment values were neither inspected nor copied into the report. |
 
-가드레일 2의 “외부 전달 금지”는 SPEC/DESIGN이 명시적으로 허용한 번역 프로바이더 요청을 제외한 결과 전달 제한으로 해석했다. 문서 자체는 선택한 외부 LLM API에 전송된다. 이를 포함해 모든 외부 전송을 금지한다는 의미라면 현재 제품 설계와 충돌하므로 문구를 명확히 해야 한다. 프로바이더 측 저장 기간·학습 사용·계정별 보존 정책은 로컬 무저장 테스트로 검증되지 않는다.
+Guardrail 2's "no external forwarding" was interpreted as a limit on forwarding results, excluding the translation-provider requests that SPEC/DESIGN explicitly allow. The document itself is sent to the chosen external LLM API. If every external transmission were meant to be forbidden, that would conflict with the current product design and the wording should be clarified. Provider-side retention, training use and per-account retention policies are not verified by the local no-storage tests.
 
-## 나머지 공격 표면 점검
+## Remaining attack-surface check
 
-| 영역 | 결과 |
+| Area | Result |
 | --- | --- |
-| SQL·데이터베이스 | 현재 코드에 DB 클라이언트·SQL 쿼리·ORM 경로가 없어 SQL injection과 DB 접근 제어는 해당 없음. |
-| OS 명령·코드 주입 | 운영 `src/`에 문서 기반 shell 실행, eval, 동적 코드 실행 경로가 없다. LLM 결과를 실행하지 않는다. |
-| XSS | 프로젝트에 HTTP 웹 UI·HTML 렌더러가 없다. Telegram postText는 parse_mode를 지정하지 않고 DOCX HTML도 직접 웹에 삽입하지 않는다. 현재 웹 XSS 실행 경로는 확인하지 않았다. 생성된 Markdown을 향후 웹에 표시한다면 별도 sanitizer가 필요하다. |
-| CSRF | 브라우저 쿠키 인증·웹 변경 endpoint가 없어 전통적인 CSRF는 해당 없음. Telegram 명령 권한 누락은 SEC-01의 인증·인가 문제다. |
-| 직접 SSRF | 업로드 본문 URL을 앱이 fetch하는 경로는 확인하지 않았다. Telegram 다운로드 host는 코드에 고정된다. OpenAI의 baseUrl은 코드 옵션이고 현재 설정 파일이나 모델에서 입력받지 않는다. Claude 환경변수 경로는 SEC-05와 같이 별도로 존재한다. |
-| DOCX 외부 파일 읽기 | 설치된 Mammoth의 `externalFileAccess` 기본값은 false이며 프로젝트는 true로 변경하지 않는다. 문서 외부 이미지 경로로 임의 로컬 파일을 읽는 취약점은 확인하지 않았다. 향후 링크 보존·변환 수정 시 이 설정을 유지해야 한다. |
-| 리디렉션 | 웹 redirect endpoint는 없다. fetch 요청의 redirect 정책을 고정하지 않는 것은 외부 서버 신뢰에 의존하는 부분이다. 공격자가 초기 목적지나 신뢰 서버를 통제하지 않고 임의 redirect를 주입하는 현재 경로는 확인하지 않았다. |
-| 경로 순회 업로드 | 사용자 fileName은 로그·출력 첨부명에 사용되지만 로컬 문서 저장 경로에는 사용되지 않는다. 파일명에 `../`를 넣어 서버 파일을 덮어쓰는 경로는 확인하지 않았다. 설정 경로의 로컬 공격은 SEC-07과 구분한다. |
-| 권한 상승 | SEC-01의 애플리케이션 관리 권한 노출 외에 sudo·setuid·OS 권한 변경 실행 경로는 없다. 봇을 root로 실행할 필요가 없다. |
-| 환경변수 | `.env.example`의 비밀값은 비어 있고 process.loadEnvFile은 CWD 파일을 읽는다. 전체 환경변수 덤프는 하지 않았다. 비밀값 외 SDK 제어 환경변수도 보안 경계에 영향을 준다(SEC-04·05). |
+| SQL / database | No DB client, SQL query or ORM path in the code, so SQL injection and DB access control do not apply. |
+| OS command / code injection | No document-driven shell execution, eval or dynamic code execution in production `src/`. LLM results are never executed. |
+| XSS | No HTTP web UI or HTML renderer. Telegram postText sets no parse_mode, and DOCX HTML is never inserted into a web page. No web XSS path was confirmed. A separate sanitizer would be needed if generated Markdown were shown on the web later. |
+| CSRF | No browser cookie authentication or web mutation endpoint, so classic CSRF does not apply. The missing Telegram command authorization is SEC-01. |
+| Direct SSRF | No path where the app fetches URLs from uploaded content. The Telegram download host is fixed in code. OpenAI's baseUrl is a code option and is not taken from config or the model. The Claude environment-variable path exists separately as SEC-05. |
+| DOCX external file reads | The installed Mammoth's `externalFileAccess` defaults to false and the project does not change it. No vulnerability reading arbitrary local files via external image paths was found. Keep this setting when preserving links or changing the conversion. |
+| Redirects | No web redirect endpoint. Not pinning the redirect policy of fetch requests relies on trusting external servers. No current path was found where an attacker injects arbitrary redirects without controlling the initial destination or a trusted server. |
+| Path-traversal uploads | The user's fileName is used in logs and attachment names but never in a local document storage path. No path was found where `../` in a file name overwrites server files. Local attacks on the config path are treated separately in SEC-07. |
+| Privilege escalation | Apart from SEC-01's exposure of application admin rights, there is no sudo/setuid or OS privilege change path. The bot does not need to run as root. |
+| Environment variables | `.env.example` secrets are empty and process.loadEnvFile reads the CWD file. No full environment dump was taken. Non-secret SDK control variables also affect the security boundary (SEC-04, SEC-05). |
 
-## 의존성·공급망 검수
+## Dependency and supply-chain review
 
-- `npm audit --json --ignore-scripts`를 npm 레지스트리에 읽기 전용으로 실행했다. 최초 sandbox DNS 실패 후 허용된 네트워크 실행으로 완료했다. 결과는 **알려진 취약점 0건**: critical/high/moderate/low/info 모두 0. 감사 대상 메타데이터 총 의존성은 291개(prod 56, dev 225 등 분류는 중복 가능)다.
-- 이 결과는 해당 시점 레지스트리의 알려진 advisory 기준이며 악성 패키지·미공개 취약점·모든 전이 코드의 안전성을 증명하지 않는다. `npm audit fix`, 의존성 설치·업그레이드·lockfile 변경은 실행하지 않았다.
-- lockfile의 resolved URL은 검사 범위에서 모두 `registry.npmjs.org`였고 resolved 항목에 integrity 누락은 없었다. 버전·해시 고정은 재현성과 전송 무결성을 돕지만 패키지 제작자 신뢰를 대신하지 않는다.
-- 주요 잠금 버전: `@anthropic-ai/sdk` 0.124.0 (`package-lock.json:45`), Mammoth 1.12.2 (`:3043`), pdf-parse 2.4.5 (`:3257`), pdfjs-dist 5.4.296 (`:3277`), grammY 1.46.0, Zod 4.5.4, JSZip 3.10.1.
-- lockfile의 `hasInstallScript` 항목은 esbuild 0.28.2 (`package-lock.json:2086`)와 fsevents 2.3.3 (`:2471`)였다. 이것 자체를 악성 코드로 분류하지 않는다. 설치·빌드는 비밀값 없는 환경에서 수행하고 필요한 lifecycle script만 허용하는 것이 좋다.
-- `package.json:24,28`의 검사·배포 전 게이트에는 audit/secret scan이 없다. CI의 `npm ci`, 정기 advisory 확인, secret scan, 릴리스 출처 검증을 보완할 수 있다. 현재 `.github` 워크플로는 확인되지 않았다.
-- npm 패키지 `files`는 dist로 제한돼 있지만 개발 의존성 설치·빌드 공급망은 여전히 검토 대상이다. 전체 Git 과거 이력의 secret scan, 이미 게시된 npm tarball 검증, 서명·provenance 검증은 이번에 수행하지 않았다.
+- `npm audit --json --ignore-scripts` was run read-only against the npm registry. After an initial sandbox DNS failure it completed with network allowed. Result: **0 known vulnerabilities** — critical/high/moderate/low/info all 0. Audited dependency metadata totals 291 packages (prod 56, dev 225; categories may overlap).
+- This reflects known advisories in the registry at that time and does not prove the absence of malicious packages, undisclosed vulnerabilities or the safety of all transitive code. `npm audit fix`, dependency installs/upgrades and lockfile changes were not run.
+- All resolved URLs in the lockfile within the checked range were `registry.npmjs.org`, with no missing integrity fields. Version and hash pinning help reproducibility and transport integrity but do not replace trust in package authors.
+- Key locked versions: `@anthropic-ai/sdk` 0.124.0 (`package-lock.json:45`), Mammoth 1.12.2 (`:3043`), pdf-parse 2.4.5 (`:3257`), pdfjs-dist 5.4.296 (`:3277`), grammY 1.46.0, Zod 4.5.4, JSZip 3.10.1.
+- `hasInstallScript` entries in the lockfile were esbuild 0.28.2 (`package-lock.json:2086`) and fsevents 2.3.3 (`:2471`). These are not classified as malicious. Install and build in an environment without secrets and allow only the necessary lifecycle scripts.
+- The check and pre-publish gates in `package.json:24,28` contain no audit or secret scan. `npm ci` in CI, periodic advisory checks, secret scanning and release provenance verification could be added. No `.github` workflow was found.
+- The npm package `files` is limited to dist, but the dev-dependency install and build supply chain remains subject to review. A full Git-history secret scan, verification of the already-published npm tarball, and signature/provenance verification were not performed here.
 
-## 검수 범위·실행 결과·제한
+## Scope, execution results and limits
 
-- 기준: 2026-09-05, 커밋 `fda3f25`, Node v24.12.0. `src/` 43개 파일과 프로젝트 가드레일·관련 테스트·설정·스크립트·lockfile·설치된 핵심 의존성 구현을 검토했다.
-- `npm run check` 재실행 통과: typecheck·ESLint·Prettier·20개 테스트 파일/178개 테스트. core lines 97.19%, branches 86.79%. 이 커버리지는 보안 공격 케이스의 완전성을 뜻하지 않는다.
-- 모든 앱 동작 재현은 합성 키·합성 문서·목 fetch/API로 수행했다. 문서 입력·결과의 실제 Telegram/LLM 전송, 실 과금, 사용자의 홈 설정 열람, 대용량 DoS·실제 계정 공격은 하지 않았다.
-- 네트워크 접근은 npm advisory 조회와 공개 공식 문서 확인에 사용했다. 등록된 봇·사용자·다른 채팅에 메시지를 보내지 않았다.
-- 신규 코드·테스트는 만들지 않았다. 이 문서만 추가하고 앞서 작성한 `001_CODE_REVIEW.md` 및 기존 소스·설정·lockfile은 보존했다. 기존 검사로 커버리지 산출물은 생성될 수 있다.
+- Baseline: 2026-09-05, commit `fda3f25`, Node v24.12.0. Reviewed the 43 files under `src/`, the project guardrails, related tests, configuration, scripts, the lockfile and the installed core dependency implementations.
+- `npm run check` re-run passed: typecheck, ESLint, Prettier, 20 test files / 178 tests. Core lines 97.19%, branches 86.79%. This coverage does not imply completeness of security attack cases.
+- All application behaviour was reproduced with synthetic keys, synthetic documents and mock fetch/API. No real Telegram/LLM transmission of document input or results, no real billing, no reading of the user's home config, no large-scale DoS or real account attacks.
+- Network access was used for the npm advisory lookup and to check public official documentation. No messages were sent to the registered bot, users or other chats.
+- No new code or tests were created. Only this document was added; the earlier `001_CODE_REVIEW.md` and the existing source, configuration and lockfile were preserved. Coverage artifacts may have been generated by the existing checks.
 
-우선 대응은 SEC-01 접근 권한, SEC-02 비용·속도 제한, SEC-03 파서 자원 격리다. 다음으로 가드레일 1·4의 오류 로그·환경변수·파일 권한 문제를 수정하고, 실제 SDK를 사용한 목 기반 보안 회귀 검증을 추가하는 것이 좋다.
+Priority response was SEC-01 access control, SEC-02 cost/rate limits and SEC-03 parser resource isolation, followed by the error-log, environment-variable and file-permission issues under guardrails 1 and 4, and mock-based security regression tests using the real SDK. All items except full process isolation (SEC-03, queued for v0.2) were addressed in R1–R7 on 2026-09-06.
