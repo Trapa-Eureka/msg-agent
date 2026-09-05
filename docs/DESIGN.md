@@ -103,7 +103,7 @@ export type OutputPlan =
 - 온보딩 `init`에서 키 검증 1회 호출. 실패 시 수정 방법 담긴 안내.
 - 토큰 상한(config `maxChars`) 초과 문서는 planner가 요약 모드 강제 제안 → 사용자가 `/full`로 명시 요청해도 상한 초과면 거절 사유 안내 (가드레일 5).
 
-## 6. 설정 (adapters/configStore — ~/.message/config.json, 권한 600)
+## 6. 설정 (adapters/configStore — ~/.msg-agent/config.json, 권한 600)
 
 ```json
 {

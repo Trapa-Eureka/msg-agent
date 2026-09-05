@@ -1,7 +1,6 @@
 {
-  "name": "message",
+  "name": "msg-agent",
   "version": "0.1.0",
-  "private": true,
   "description": "Personal agent that auto-translates documents uploaded to a messenger chat into your native language",
   "license": "MIT",
   "type": "module",
@@ -9,7 +8,7 @@
     "node": ">=20"
   },
   "bin": {
-    "message": "./dist/cli/index.js"
+    "msg-agent": "./dist/cli/index.js"
   },
   "files": [
     "dist"
@@ -53,5 +52,19 @@
     "pdf-parse": "^2.4.5",
     "prompts": "^2.4.2",
     "zod": "^4.5.4"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Trapa-Eureka/msg-agent.git"
+  },
+  "keywords": [
+    "telegram",
+    "translation",
+    "document",
+    "pdf",
+    "docx",
+    "claude",
+    "openai",
+    "agent"
+  ]
 }

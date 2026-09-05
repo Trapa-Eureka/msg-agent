@@ -23,22 +23,22 @@ let path: string;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "message-config-"));
-  path = join(dir, ".message", "config.json");
+  path = join(dir, ".msg-agent", "config.json");
 });
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
 describe("configStore", () => {
-  it("defaults to ~/.message/config.json", () => {
-    expect(defaultConfigPath("/home/u")).toBe("/home/u/.message/config.json");
+  it("defaults to ~/.msg-agent/config.json", () => {
+    expect(defaultConfigPath("/home/u")).toBe("/home/u/.msg-agent/config.json");
   });
 
   it("round-trips a config with defaults applied and mode 600 / dir 700", () => {
     const saved = saveConfig(input, path);
     expect(saved.ok).toBe(true);
     expect(configFileMode(path)).toBe(0o600);
-    expect(statSync(join(dir, ".message")).mode & 0o777).toBe(0o700);
+    expect(statSync(join(dir, ".msg-agent")).mode & 0o777).toBe(0o700);
 
     const loaded = loadConfig(path);
     expect(loaded.ok).toBe(true);
@@ -52,7 +52,7 @@ describe("configStore", () => {
   });
 
   it("tightens permissions of a pre-existing loose file", () => {
-    writeFileSync(path.replace("/.message/config.json", "/loose.json"), "{}", { mode: 0o644 });
+    writeFileSync(path.replace("/.msg-agent/config.json", "/loose.json"), "{}", { mode: 0o644 });
     const loose = join(dir, "loose.json");
     expect(statSync(loose).mode & 0o777).toBe(0o644);
     expect(saveConfig(input, loose).ok).toBe(true);

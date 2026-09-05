@@ -22,7 +22,7 @@
 
 ### Telegram
 
-- [ ] **봇 토큰 발급** — @BotFather `/newbot`. 토큰은 `.env`(`TELEGRAM_BOT_TOKEN`) 또는 `~/.message/config.json`(권한 600)에만 저장. 커밋·로그 출력 금지.
+- [ ] **봇 토큰 발급** — @BotFather `/newbot`. 토큰은 `.env`(`TELEGRAM_BOT_TOKEN`) 또는 `~/.msg-agent/config.json`(권한 600)에만 저장. 커밋·로그 출력 금지.
 - [x] **명령 등록** — 불필요해짐(2026-09-05, T5): 어댑터가 `start()` 시 `setMyCommands`로 자동 등록한다. BotFather `/setcommands`는 건너뛴다.
 - [ ] **그룹 프라이버시 모드 해제** — 프라이버시 모드에서는 봇이 그룹의 일반 메시지·파일을 받지 못한다. 그룹에서 쓸 계획이면 `/setprivacy` → Disable 후 봇을 그룹에서 제거했다가 다시 초대. `npm run smoke`가 getMe로 해제 여부를 표시한다.
 - [ ] **테스트 대화방** — 1:1 대화 1개 + 봇을 초대한 테스트 그룹 1개.
@@ -41,8 +41,8 @@
 
 ## 3. T11 이후 공개 시점
 
-- [ ] **npm 패키지명 확정** — `message`는 npm에 이미 선점됨(0.0.1 존재, 2026-09-05 확인). T11이 SPEC §8에 기록한 후보 `msg-agent` / `docslate` / `chatdoc-translate` 중 선택(모두 2026-09-05 사용 가능). 스코프 대안 `@shiz_son/msg-agent`.
-- [ ] **bin 이름·설정 경로 통일** — 패키지명 확정에 맞춰 `~/.message/`, CLI 명칭, README 표기를 일괄 갱신.
+- [x] **npm 패키지명 확정** — `msg-agent`(2026-09-05 결정). SPEC §8 기록.
+- [x] **bin 이름·설정 경로 통일** — 2026-09-05 완료: bin `msg-agent`, 설정 `~/.msg-agent/config.json`, CLI 명칭·README 갱신, `package.json`의 `private` 해제(publish는 여전히 사람이 `npm publish`로만).
 - [ ] **npm 계정** — `npm login` 상태, 2FA, publish 권한 확인.
 - [ ] **임계치 기본값 승인** — 스모크 결과를 보고 `inlineThresholdChars` 3,000 유지 여부 결정 (SPEC §8).
 - [ ] **히스토리 점검** — 공개 전환 전 git 히스토리에 키·토큰이 들어간 적 없는지 확인.
