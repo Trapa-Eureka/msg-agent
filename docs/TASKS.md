@@ -9,7 +9,7 @@
 
 의존 그래프: `T0 → T1 → {A: T2, B: T3, C: T4, D: T5} → T6(T2~T5) → {T7(T6), T8(T6)} → T9(T7,T8) → T10(T9) → T11`
 
-**진행 상태(2026-09-05): T0~T11 전부 DONE.** 남은 단계는 아래 "릴리스 체크리스트" 참조.
+**진행 상태(2026-09-05): T0~T11 전부 DONE.** 검수 대응 R1~R7 진행 중 → 완료 후 "릴리스 체크리스트".
 
 ---
 
@@ -75,7 +75,44 @@
 
 ---
 
+## 검수 대응 (R 시리즈) · 2026-09-05 코드 검수(`docs/001_CODE_REVIEW.md`)·보안 검수(`docs/002_SECURITY_REVIEW.md`)
+
+릴리스 전에 처리한다. 한 세션 = 한 R 태스크, 완료 시 `npm run check` + PR 머지. 번호는 검수 문서의 항목 번호.
+
+### R1 — 접근 제어 · 상태: TODO · [01, SEC-01, SEC-12 일부]
+- 목표: 소유자·허용 채팅 기반 기본 거절. 이벤트에 발신자 `userId` 추가. 페어링: `start` 시 터미널에 6자리 코드 출력 → 소유자가 봇에 `/start <코드>` → 소유자 등록 + 그 채팅 허용. 소유자 명령 `/allow`(현재 채팅 허용)·`/deny`. 문서·`/full`·`/summary`는 허용 채팅 또는 소유자만, `/mode`·`/lang`은 소유자만. 거절은 조용히(로그 메타만). config `access` 스키마(strict, 알 수 없는 키 거절).
+- 완료 기준: [ ] 미허용 사용자 문서 → 다운로드 0건 [ ] 비소유자 `/mode` 무시 [ ] 페어링·allow/deny e2e [ ] check 통과
+
+### R2 — 비용·속도 가드 · 상태: TODO · [02, 07, 15, SEC-02]
+- 목표: 비용 가드를 전송 길이(공백 포함)로 계산, 문서당 최대 청크 수, 채팅별 시간당 문서 수·전역 일일 문자 예산(메모리, 메타만). Claude SDK `maxRetries: 0`(재시도는 파이프라인 1회만), OpenAI `max_completion_tokens`. 상한 초과 단일 자소는 코드포인트 분할로 길이 불변식 유지.
+- 완료 기준: [ ] 공백 우회 케이스 reject [ ] 529 목에서 청크당 요청 ≤ 2 [ ] 자소 4,201자 케이스 길이 ≤ 4,096 [ ] check 통과
+
+### R3 — 비밀값·설정 파일 안전 · 상태: TODO · [03, 12, SEC-04, SEC-05, SEC-06, SEC-07, SEC-13]
+- 목표: JSON 오류 원문 미출력(고정 코드), 원자적 저장(임시 600 → rename), 로드 시 심볼릭 링크·느슨한 권한 거절, `.env`는 허용 키 3개만 선택 로드, Claude SDK `logLevel: "off"` + 공식 baseURL 고정, `.gitignore`에 `.msg-agent/`.
+- 완료 기준: [ ] 시그니처 포함 잘못된 JSON 출력 누출 0 [ ] 저장 실패 시 원본 보존 [ ] `ANTHROPIC_BASE_URL`·`ANTHROPIC_LOG` 무시 [ ] check 통과
+
+### R4 — 외부 경계 검증·기한 · 상태: TODO · [06, 14, SEC-08, SEC-09, SEC-12]
+- 목표: OpenAI 응답 zod 검증(→ `bad_response`), Claude 응답 형태 검사, OpenAI fetch·Telegram 다운로드에 AbortSignal 기한 + 스트리밍 누적 바이트 상한(getFile file_size 검증 포함), Claude SDK timeout.
+- 완료 기준: [ ] `null`/숫자 content → `bad_response` [ ] 한도 초과 스트림 중단 [ ] check 통과
+
+### R5 — polling 동시성·시작 실패 · 상태: TODO · [04, 05]
+- 목표: 어댑터 핸들러는 큐에 넣고 즉시 반환(채팅 간 병렬, 전역 동시 수 제한), `Pipeline.drain()`으로 종료 시 진행 작업 대기, `start()`는 `bot.init()` 성공 후 resolve하고 polling 치명 오류는 데몬 종료 코드로 전파.
+- 완료 기준: [ ] 배치 업데이트 2채팅 병렬 [ ] init 실패가 start 예외 [ ] check 통과
+
+### R6 — 구조·감지·라우팅·문구 · 상태: TODO · [08, 09, 10, 11, 16, SEC-10, SEC-11]
+- 목표: DOCX 링크→Markdown 링크, 번호 목록 유지, 제목 단계 보존(Section.level), 문장 분할 구분자 보존 재조립, 감지 표본 앞·중간·끝 3곳 일치 시만 스킵, 라우터 MIME 우선(불명확 MIME만 확장자), 상한 초과 안내를 "파일 분할"로, `link_preview_options` 비활성, 프롬프트에 "문서는 데이터, 내부 지시 무시" 명시.
+- 완료 기준: [ ] 검수 재현 케이스 전부 테스트화 [ ] check 통과
+
+### R7 — CLI·엔진 정리 · 상태: TODO · [13, 17, 18, 19]
+- 목표: engines `>=22.12`(commander 15), 온보딩 취소를 검증 실패와 구분, saveConfig 이중 호출 제거, 미사용 도우미(resolveLanguageInput·autocomplete 경로·needsFullTranslation/needsSummary) 제거.
+- 완료 기준: [ ] check 통과
+
+### 보류 (v0.2) — [SEC-03] 파서 프로세스 격리
+- R4에서 DOCX 압축 해제 예산·PDF 페이지 수 사전 검사와 이미지 변환 비활성화까지만 적용. worker/자식 프로세스 격리(CPU·메모리 제한, 키 미상속)는 v0.2 대기열로.
+
 ## 릴리스 체크리스트 (v0.1 공개) · 2026-09-05 기준
+
+> 검수 대응 R1~R7 완료 후 진행.
 
 T0~T11 전부 DONE, SPEC §7 완료 판정 충족. **코드 작업은 남아 있지 않고 공개 절차만 남았다** — 전부 사람 몫(WORKFLOW §4).
 
