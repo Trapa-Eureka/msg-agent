@@ -25,7 +25,7 @@
 - [x] **봇 토큰 발급** — 2026-09-05 완료: `.env`의 `TELEGRAM_BOT_TOKEN`, getMe 확인(@docu_translate_bot). @BotFather `/newbot`. 토큰은 `.env`(`TELEGRAM_BOT_TOKEN`) 또는 `~/.msg-agent/config.json`(권한 600)에만 저장. 커밋·로그 출력 금지.
 - [x] **명령 등록** — 불필요해짐(2026-09-05, T5): 어댑터가 `start()` 시 `setMyCommands`로 자동 등록한다. BotFather `/setcommands`는 건너뛴다.
 - [x] **그룹 프라이버시 모드 해제** — 2026-09-05 스모크에서 can_read_all_group_messages=true 확인(해제 완료). 프라이버시 모드에서는 봇이 그룹의 일반 메시지·파일을 받지 못한다. 그룹에서 쓸 계획이면 `/setprivacy` → Disable 후 봇을 그룹에서 제거했다가 다시 초대. `npm run smoke`가 getMe로 해제 여부를 표시한다.
-- [ ] **테스트 대화방** — 1:1 대화 1개 + 봇을 초대한 테스트 그룹 1개.
+- [x] **테스트 대화방** — 1:1 대화로 스모크 완료(2026-09-05). 그룹은 프라이버시 해제까지 확인, 그룹 업로드 실검증은 선택.
 
 ### AI 프로바이더
 
@@ -34,23 +34,29 @@
 
 ### 스모크용 실제 문서 (SPEC §7)
 
-- [ ] **영어 PDF, 짧은 것 1건** — 추출 텍스트 3,000자 이하 → `inline_full` 경로 확인.
-- [ ] **영어 PDF, 긴 것 1건** — 3,000자 초과 → `summary_plus_file` 경로 확인.
+- [ ] **영어 PDF, 짧은 것 1건** (선택) — 3,000자 이하 → `inline_full` 경로. e2e-mock으로는 검증됨(T9); 실 채팅 확인은 선택.
+- [x] **영어 PDF, 긴 것 1건** — 2026-09-05 완료: 4,755자 이력서 → 요약 + 파일.
 - [x] **스모크 실행** — 2026-09-05 통과: 영어 PDF(4,755자) → summary_plus_file, 요약+파일 수신, 55.6초. 체크리스트 전부 ✓. `inlineThresholdChars` 3,000 유지 여부는 §3에서 결정.
-- [ ] 민감하지 않은 문서로 준비한다. 실 채팅에 번역 결과가 게시된다.
+- [x] 민감하지 않은 문서로 준비한다. 실 채팅에 번역 결과가 게시된다.
 
 ## 3. T11 이후 공개 시점
 
 - [x] **npm 패키지명 확정** — `msg-agent`(2026-09-05 결정). SPEC §8 기록.
 - [x] **bin 이름·설정 경로 통일** — 2026-09-05 완료: bin `msg-agent`, 설정 `~/.msg-agent/config.json`, CLI 명칭·README 갱신, `package.json`의 `private` 해제(publish는 여전히 사람이 `npm publish`로만).
-- [ ] **npm 계정** — `npm login` 상태, 2FA, publish 권한 확인.
-- [ ] **임계치 기본값 승인** — 스모크 결과를 보고 `inlineThresholdChars` 3,000 유지 여부 결정 (SPEC §8).
-- [ ] **히스토리 점검** — 공개 전환 전 git 히스토리에 키·토큰이 들어간 적 없는지 확인.
-- [ ] **저장소 공개 전환** — LICENSE 커밋 + `package.json`의 `license`·`repository` 필드 기입 후 전환.
+- [ ] **npm 계정** — `npm whoami` = shiz_son 로그인 확인(2026-09-05). **2FA 설정 여부는 npmjs.com 계정 설정에서 직접 확인** (publish 시 OTP 요구될 수 있음).
+- [x] **임계치 기본값 승인** — 2026-09-05 3,000 유지 결정(SPEC §8).
+- [x] **히스토리 점검** — 2026-09-05 전체 커밋 스캔(sk-ant-/sk-proj-/봇 토큰 패턴) 0건. `.env`는 추적된 적 없음.
+- [ ] **저장소 공개 전환** — LICENSE·`license`·`repository` 필드는 이미 준비됨. 아래 명령만 실행하면 된다.
   ```bash
   gh repo edit Trapa-Eureka/msg-agent --visibility public --accept-visibility-change-consequences
   ```
-- [ ] **npm publish** — 사람 승인 후 실행 (WORKFLOW §4).
+- [ ] **npm publish** — 사람이 실행. `prepublishOnly`가 자동으로 `npm run check && npm run build`를 돌리므로 게이트 미통과면 publish가 중단된다.
+  ```bash
+  cd /Volumes/DevWork/work/msg-agent
+  npm publish            # 2FA면 OTP 입력
+  git tag v0.1.0 && git push origin v0.1.0
+  ```
+  게시 후 확인: `npx msg-agent@0.1.0 --version` → `0.1.0`
 
 ## 4. 항상 사람이 잡는 것 (WORKFLOW §4 요약)
 

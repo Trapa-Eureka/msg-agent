@@ -9,6 +9,8 @@
 
 의존 그래프: `T0 → T1 → {A: T2, B: T3, C: T4, D: T5} → T6(T2~T5) → {T7(T6), T8(T6)} → T9(T7,T8) → T10(T9) → T11`
 
+**진행 상태(2026-09-05): T0~T11 전부 DONE.** 남은 단계는 아래 "릴리스 체크리스트" 참조.
+
 ---
 
 ### T0 — 프로젝트 스캐폴딩 · 상태: DONE(2026-09-05)
@@ -72,6 +74,20 @@
 - 결정 기록: 스모크는 `runStart`를 그대로 조립하고 로거를 감싸 파이프라인 이벤트(doc.received/planned/done)로 체크리스트를 채움 — 본문은 절대 출력하지 않음 / 그룹 프라이버시 모드는 getMe의 `can_read_all_group_messages`로 판정(그룹 업로드 없이 확인 가능) / `--chat`이 있으면 안내 메시지 게시, `--wait`(기본 300초) 동안 문서 1건 대기 / 후보: msg-agent · docslate · chatdoc-translate (+ `@shiz_son/msg-agent`) / **실 스모크 실행·패키지명 확정·publish는 사람 몫(HUMAN_PREP §2·§3)**
 
 ---
+
+## 릴리스 체크리스트 (v0.1 공개) · 2026-09-05 기준
+
+T0~T11 전부 DONE, SPEC §7 완료 판정 충족. **코드 작업은 남아 있지 않고 공개 절차만 남았다** — 전부 사람 몫(WORKFLOW §4).
+
+- [x] 패키지명 `msg-agent` 확정, `package.json` name/bin/license/repository, `private` 해제, lockfile 동기화
+- [x] `npm pack --dry-run`으로 배포물 확인(LICENSE·README·dist만 포함), `prepublishOnly = check + build`
+- [x] git 히스토리 시크릿 스캔 0건, `.env` 미추적
+- [x] 실 스모크 통과(2026-09-05), 임계치 3,000 유지
+- [ ] (선택) 짧은 영어 PDF로 `inline_full` 경로 실 채팅 확인
+- [ ] npm 계정 2FA 확인
+- [ ] 저장소 공개 전환: `gh repo edit Trapa-Eureka/msg-agent --visibility public --accept-visibility-change-consequences`
+- [ ] `npm publish` → `git tag v0.1.0 && git push origin v0.1.0` → `npx msg-agent@0.1.0 --version` 확인
+- [ ] 공개 후 README 상태 줄에 npm 링크·버전 기재
 
 ## v0.2 대기열 (착수 금지 — SPEC 로드맵 참조)
 

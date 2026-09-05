@@ -52,10 +52,12 @@
 
 ## 7. 성공 기준 (v0.1 완료 판정)
 
-- e2e-mock: 업로드→감지→번역→게시(짧은 문서 전문 / 긴 문서 요약+파일 / 같은 언어 스킵 / 명령 4종) 전부 통과.
-- 실스모크: 실제 Telegram 봇으로 영어 PDF 1건 → 한국어 요약+파일 수신 확인.
-- 문서 내용이 로그·디스크에 잔류하지 않음을 테스트로 증명.
-- `npm run check` 통과, `src/core/` 커버리지 90% 이상.
+- [x] e2e-mock: 업로드→감지→번역→게시(짧은 문서 전문 / 긴 문서 요약+파일 / 같은 언어 스킵 / 명령 4종) 전부 통과. — T9 `tests/e2e.test.ts`
+- [x] 실스모크: 실제 Telegram 봇으로 영어 PDF 1건 → 한국어 요약+파일 수신 확인. — 2026-09-05, @docu_translate_bot, 4,755자 PDF, 55.6초, 체크리스트 전부 ✓ (TESTING §5)
+- [x] 문서 내용이 로그·디스크에 잔류하지 않음을 테스트로 증명. — T10 `tests/privacy-audit.test.ts`
+- [x] `npm run check` 통과, `src/core/` 커버리지 90% 이상. — 178 테스트, core 97% (`docs/COVERAGE.md`)
+
+**v0.1 완료 판정: 충족 (2026-09-05).** 남은 것은 공개 절차(TASKS.md 릴리스 체크리스트).
 
 ## 8. 미결 사항
 
@@ -64,6 +66,6 @@
   2. `docslate` — 짧고 브랜드화 가능(document + translate), bin `docslate`
   3. `chatdoc-translate` — 기능 설명형, bin `chatdoc-translate`
   - 대안이었던 스코프 패키지 `@shiz_son/msg-agent`는 불필요. 반영 완료: `package.json` name·bin `msg-agent`, 설정 경로 `~/.msg-agent/`, README. `npm publish`는 실 스모크 후 사람이 실행.
-- [ ] 짧은/긴 임계치 기본값(3,000자) — 스모크 후 튜닝
+- [x] 짧은/긴 임계치 기본값(3,000자) — 2026-09-05 실 스모크(영어 이력서 4,755자 → 요약+파일) 후 **3,000 유지**로 결정(Jin). 사용자별 조정은 config `inlineThresholdChars`.
 - [ ] 요약 프롬프트에 문서 유형별 템플릿(계약서/매뉴얼/공지) 둘지 v0.2 검토
 - [ ] Viber 어댑터 시 웹훅 호스팅 권장안(Cloudflare Tunnel vs 배포)

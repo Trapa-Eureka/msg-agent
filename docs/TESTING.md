@@ -58,7 +58,9 @@
 
 ## 5. 수동 스모크 (사람 전용 — scripts/smoke.ts)
 
-`npm run smoke`: 실 봇 토큰 + 실 프로바이더로 ① 봇 getMe 확인 ② 지정 chat에 안내 게시 ③ 사람이 영어 PDF 업로드 → 요약+파일 수신 확인 체크리스트 출력. 그룹 프라이버시 모드에서 문서 수신 여부도 이때 확인해 SPEC/온보딩 문구를 갱신한다.
+`npm run smoke -- [--chat <id>] [--wait 300]`: 실 봇 토큰 + 실 프로바이더로 ① getMe(그룹 프라이버시 모드는 `can_read_all_group_messages`로 판정) ② 프로바이더 키 검증 + 실번역 1청크 프로브 ③ 데몬 기동 후 사람이 영어 PDF 업로드 → 파이프라인 이벤트로 체크리스트 채움.
+
+**2026-09-05 첫 실 스모크 결과(통과)**: @docu_translate_bot, Claude `claude-sonnet-5`, 영어 이력서 PDF 67KB·4,755자 → `summary_plus_file`, 요약+`.md` 파일 수신, 55.6초. 프라이버시 모드 해제 확인. 발견·수정: Sonnet 5가 `fallbacks` 파라미터를 거부(400) → 프로바이더 수정 + 프로브 단계 추가.
 
 ## 6. 커버리지
 
