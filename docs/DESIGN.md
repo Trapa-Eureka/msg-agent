@@ -74,7 +74,17 @@ export type OutputPlan =
 7. 어댑터로 플랜 실행 → 임시 데이터 즉시 폐기 (가드레일 1)
 8. 실패 시: 청크 단위 1회 재시도 → 그래도 실패면 부분 결과 여부를 알리고 모국어 오류 안내
 
+**조립 규칙(core/pipeline.ts)**
+- 의존성 주입: `MessengerAdapter`, `DocumentExtractor[]`, `LanguageDetector`, `TranslatorProvider`, `SettingsStore`(config 읽기/저장 — 파일 IO는 어댑터), `phrasesFor(lang) → Phrases`(사용자 문구 팩, T8), `Logger`(메타데이터 전용), `Clock`. 코어에는 문자열 리터럴이 없다 — 모든 사용자 대면 문구는 `Phrases` 키를 통해서만 나간다.
+- 번역 호출은 **청크 1개당 `translate([chunk])` 1회**. 실패 시 `retryable`이면 같은 청크를 1회 재시도, 그래도 실패면 번역문을 전혀 게시하지 않고 `translationFailed(done, total)` 안내. 정상 경로의 프로바이더 호출 수 = 청크 수(+ 요약 1).
+- 진행 알림: 추출 시작 시 1회, 번역은 청크 수가 2개 이상일 때 시작 시 `0/m`과 이후 약 1/4 지점마다(최대 4회) `n/m`, 요약 시작 시 1회.
+- 채팅별 직렬화: 같은 chatId의 문서·명령은 순서대로 처리하고, 다른 chatId는 동시에 처리한다(진행 메시지 혼입 방지).
+- 게시 범위: 모든 게시는 수신 이벤트의 `chatId`로만 호출한다(가드레일 2). 파일명은 `<원본 이름>.<모국어>.md`.
+- 마지막 문서 참조: chatId → `IncomingDoc`(파일 ID 기반 `download()` 클로저 + 메타). 본문·번역문은 플랜 실행 직후 참조를 버린다.
+
 명령 처리: `/full`은 직전 문서 재처리가 아니라 **마지막 문서의 `file_full` 플랜 재실행** — 이를 위해 채팅별로 "마지막 문서 참조(파일 ID·메타만, 내용 아님)"를 메모리에 보관 (프로세스 재시작 시 소멸 — 의도된 동작, 가드레일 1과 일관).
+
+`/summary`는 마지막 문서를 `summary_plus_file`로 재실행. `/mode <smart|full|summary>`·`/lang <코드>`는 검증 후 `SettingsStore`에 저장하고 확인 문구(잘못된 인자면 안내 문구). 재실행은 다시 다운로드·추출·번역하므로 비용이 든다(v0.1 허용).
 
 ## 4. Telegram 어댑터 메모
 

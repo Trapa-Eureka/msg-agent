@@ -41,9 +41,10 @@
 - 완료 기준: [x] 분할 규칙 단위 테스트(어댑터·페이크 공용 함수) [x] 20MB 초과 메타 → 다운로드 미시도 [x] 실호출 없는 요청 형태 테스트 [x] check 통과
 - 결정 기록: 분할 규칙은 `core/textSplit.ts`(문단→줄→문장→자소) 하나를 어댑터·페이크가 공유 / `download()`는 지연 실행이며 어댑터가 20MB 초과를 자체 거부(getFile 미호출) / 명령 자동완성은 `start()`에서 `setMyCommands` / 테스트는 `botInfo` 주입 + `api.config.use` 트랜스포머 + `handleUpdate` + 주입 fetch로 네트워크 0건 / 분할 게시 시 첫 파트만 원본 메시지에 reply
 
-### T6 — 파이프라인 · 상태: TODO · 의존: T2, T3, T4, T5
+### T6 — 파이프라인 · 상태: DONE(2026-09-05) · 의존: T2, T3, T4, T5
 - 목표: `core/pipeline.ts` — DESIGN §3의 8단계 + 명령 처리(마지막 문서 참조는 메모리·메타만).
-- 완료 기준: [ ] **TESTING §4 체크리스트 전 항목** (프라이버시·비용 가드 포함) [ ] check 통과
+- 완료 기준: [x] **TESTING §4 체크리스트 전 항목** (프라이버시·비용 가드 포함) [x] check 통과
+- 결정 기록: 사용자 문구는 `Phrases` 인터페이스(core/phrases.ts, 20개 키)로만 나가고 코어에 리터럴 없음 → T8이 ko/en 구현 / 설정 저장·로그·시계는 `SettingsStore`·`Logger`·`Clock` 포트로 주입 / 번역은 청크당 1호출 + retryable이면 1회 재시도, 실패 시 번역문 미게시 / 채팅별 직렬화 큐 / 진행 알림은 청크 ≥2일 때 최대 4회 / 목 추가: FakePhrases(키 태그 출력), MemorySettings, CapturingLogger, FixedClock, FixtureExtractor(+syntheticDoc)
 
 ### T7 — CLI 온보딩·데몬 · 상태: TODO · 의존: T6
 - 목표: `cli/init`(3문항 대화형 + 키·토큰 즉시 검증), `cli/start`(데몬, 종료 시그널 정리), `cli/status`.
