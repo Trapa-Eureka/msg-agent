@@ -65,9 +65,9 @@ export type OutputPlan =
 
 1. `IncomingDoc` 수신 → 크기·형식 가드 (미지원/초과 → `reject` 플랜, 사유는 모국어 문구)
 2. 진행 알림 게시 → 다운로드 → 추출기 라우팅(`supports`: MIME 우선, `application/octet-stream` 등 불명확하면 확장자로 판정) → `ExtractedDoc`. 섹션 구조화는 공용 휴리스틱(`core/sections.ts`: Markdown 제목·짧은 무종결 단독 행 = 제목, 빈 줄 = 문단)
-3. 언어 감지 — 감지 언어 = 모국어면 `skip_same_lang`. 신뢰도 낮으면 `sourceLangHint` 없이 번역 프롬프트에 위임
-4. `outputPlanner`: 추출 텍스트 길이 vs 임계치·사용자 모드(config) → 플랜 종류 결정
-5. 전문 경로: `chunker`(섹션 경계 우선 분할, 청크 순번 부여) → `translate` (진행 상태 n/m 갱신) → 순서대로 조립
+3. 언어 감지 — franc(`core/detector.ts`). 신뢰도 = 표본 글자 수 계수(100자에서 1) × 표본 전·후반 감지 일치도(둘 다 일치 1 / 하나 0.7 / 없음 0.4). **0.7 이상**일 때만 감지 언어 = 모국어면 `skip_same_lang`, 미만이면 `sourceLangHint` 없이 번역 프롬프트에 위임. 매크로언어 구성원(arb→ar, cmn→zh 등)은 `core/lang.ts`에서 정규화
+4. `outputPlanner.decidePlan`: 판정 순서 = 미지원 형식 → 바이트 상한(다운로드 전) → 같은 언어(신규 업로드만) → `maxChars` 초과(`/full`도 우회 불가, 요약 제안) → `/summary`·`/full` 요청 → 모드×임계치(임계치 이하 = 짧음, 포함). 결과는 `PlanDecision`(종류·거절 사유만, 내용 없음)
+5. 전문 경로: `chunker`(섹션 → 문단 → 문장 → 자소 클러스터 순으로 분할, 청크당 기본 4,000자, 각 청크는 섹션 제목을 `# `로 포함, 섹션 경계는 넘지 않음) → `translate` (진행 상태 n/m 갱신) → `assembleChunks`로 순번대로 조립(누락 청크가 있으면 게시하지 않음)
 6. 요약 경로: `summarize` + 전문 번역은 .md 파일 조립. full 모드에서 임계치 초과면 `file_full`(요약 호출 없이 머리말 + 전문 파일)
 7. 어댑터로 플랜 실행 → 임시 데이터 즉시 폐기 (가드레일 1)
 8. 실패 시: 청크 단위 1회 재시도 → 그래도 실패면 부분 결과 여부를 알리고 모국어 오류 안내

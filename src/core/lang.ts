@@ -23,6 +23,31 @@ for (const entry of iso6393) {
 }
 
 /**
+ * ISO 639-3 individual languages that detectors (franc) emit for what users name by the
+ * macrolanguage's 639-1 code. Maps member -> canonical code of the macrolanguage.
+ */
+const MACROLANGUAGE_MEMBER: Readonly<Record<string, string>> = {
+  arb: "ar", // Standard Arabic
+  cmn: "zh", // Mandarin
+  pes: "fa", // Iranian Persian
+  prs: "fa", // Dari
+  zsm: "ms", // Standard Malay
+  nob: "nb", // Bokmål (has its own 639-1)
+  swh: "sw", // Swahili
+  uzn: "uz",
+  azj: "az",
+  ekk: "et",
+  lvs: "lv",
+  khk: "mn",
+  plt: "mg",
+  als: "sq",
+  quy: "qu",
+  gug: "gn",
+  ydd: "yi",
+  pnb: "pa",
+};
+
+/**
  * Normalizes user input ("KO", "kor", "ko") to a canonical language code.
  * Returns undefined for anything that is not an ISO 639-1/639-3 code.
  * Language *names* ("Korean") are resolved by the onboarding autocomplete (T7), not here.
@@ -30,7 +55,8 @@ for (const entry of iso6393) {
 export function canonicalLangCode(input: string): LanguageInfo | undefined {
   const key = input.trim().toLowerCase();
   if (!/^[a-z]{2,3}$/.test(key)) return undefined;
-  return byCode.get(key);
+  const macro = MACROLANGUAGE_MEMBER[key];
+  return byCode.get(macro ?? key);
 }
 
 export function isLangCode(input: string): boolean {
