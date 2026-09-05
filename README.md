@@ -1,5 +1,7 @@
 # msg-agent
 
+[![npm](https://img.shields.io/npm/v/msg-agent)](https://www.npmjs.com/package/msg-agent) · Node.js 22.12+ · MIT
+
 메신저 대화창에 올라온 **외국어 문서를 내 모국어로 자동 번역해주는 개인용 AI Agent**.
 
 - 대화창에 문서 파일(PDF·DOCX·TXT/MD)이 업로드되면 → 언어 감지 → 모국어가 아니면 자동 번역 → 같은 대화창에 결과 게시.
@@ -61,5 +63,6 @@ npm run smoke -- [--chat <chatId>] [--wait 300]   # 실 봇·실 키로 수동 �
 ## 상태
 
 - 2026-09-04: 문서 단계 (코드 미작성). T0부터 시작.
-- 2026-09-05: T0~T11 구현 완료(178 테스트, core 커버리지 97%, 프라이버시 감사 포함), 실 Telegram 봇 + Claude 스모크 통과, 임계치 3,000 유지, 패키지명 `msg-agent` 확정. 남은 것: 저장소 공개 + `npm publish` (`docs/TASKS.md` 릴리스 체크리스트).
+- 2026-09-05: T0~T11 구현 완료, 실 Telegram 봇 + Claude 스모크 통과, 임계치 3,000 유지, 패키지명 `msg-agent` 확정.
+- 2026-09-06: 코드·보안 검수 대응 R1~R7 완료(214 테스트), 재스모크 통과. **v0.1.0 npm 공개**: https://www.npmjs.com/package/msg-agent (`npm i -g msg-agent@0.1.0`), 태그 `v0.1.0`, 저장소 공개.
 - npm 패키지명 `msg-agent` 확정(2026-09-05). 공개 후 설치: `npm i -g msg-agent` → `msg-agent init` / `msg-agent start` / `msg-agent status` (개발 중에는 `npm run cli -- <cmd>`).
