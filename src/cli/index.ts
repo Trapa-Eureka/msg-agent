@@ -3,7 +3,8 @@
 import { Command } from "commander";
 import { Bot } from "grammy";
 import prompts from "prompts";
-import { CORE_VERSION, ProviderError } from "../core/index.js";
+import { ProviderError } from "../core/index.js";
+import { PACKAGE_VERSION } from "../version.js";
 import { defaultConfigPath, loadDotEnv } from "../adapters/configStore.js";
 import { ConsoleLogger } from "../adapters/consoleLogger.js";
 import { createProvider } from "../adapters/providers/index.js";
@@ -73,7 +74,7 @@ async function verifyTelegram(token: string): Promise<VerifyResult> {
 const program = new Command();
 program
   .name("msg-agent")
-  .version(CORE_VERSION)
+  .version(PACKAGE_VERSION)
   .option("-c, --config <path>", "config file path", defaultConfigPath());
 
 program

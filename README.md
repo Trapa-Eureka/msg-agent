@@ -76,4 +76,4 @@ npm run smoke -- [--chat <chatId>] [--wait 300]   # manual smoke with a real bot
 - 2026-09-04: documentation phase (no code). Starting from T0.
 - 2026-09-05: T0–T11 implemented, real Telegram bot + Claude smoke passed, threshold kept at 3,000, package name `msg-agent` decided.
 - 2026-09-06: code and security review remediation R1–R7 done (214 tests), smoke re-passed. **v0.1.0 published to npm**: https://www.npmjs.com/package/msg-agent (`npm i -g msg-agent@0.1.0`), tag `v0.1.0`, repository public.
-- 2026-09-06: all documentation and in-code comments/CLI text translated to English (Korean remains only as the product's Korean phrase pack and test fixtures); published as v0.1.1.
+- 2026-09-06: all documentation and in-code comments/CLI text translated to English (Korean remains only as the product's Korean phrase pack and test fixtures); published as v0.1.1. v0.1.2 fixes `--version` (it printed a hard-coded 0.1.0; the CLI now reads `package.json`).
