@@ -79,7 +79,7 @@ export type OutputPlan =
 - 문구 팩(`src/phrases/`): `ko`·`en` 팩이 `satisfies Phrases`로 키 누락 시 컴파일 실패. `phrasesFor(lang)`는 ISO 639 어떤 표기든 정규화해 팩을 고르고 없으면 **en으로 폴백**. 언어 파라미터는 코드로 받고 각 팩이 `Intl.DisplayNames`로 자기 언어의 언어명을 렌더한다("한국어"/"Korean"). 문구는 메타데이터(파일명·개수·코드)만 담는다.
 - 번역 호출은 **청크 1개당 `translate([chunk])` 1회**. 실패 시 `retryable`이면 같은 청크를 1회 재시도, 그래도 실패면 번역문을 전혀 게시하지 않고 `translationFailed(done, total)` 안내. 정상 경로의 프로바이더 호출 수 = 청크 수(+ 요약 1). **재시도 책임은 파이프라인 한 곳** — Claude SDK는 `maxRetries: 0`으로 고정해 청크당 HTTP 요청 최대 2회(R2).
 - 진행 알림: 추출 시작 시 1회, 번역은 청크 수가 2개 이상일 때 시작 시 `0/m`과 이후 약 1/4 지점마다(최대 4회) `n/m`, 요약 시작 시 1회.
-- 채팅별 직렬화: 같은 chatId의 문서·명령은 순서대로 처리하고, 다른 chatId는 동시에 처리한다(진행 메시지 혼입 방지).
+- 채팅별 직렬화: 같은 chatId의 문서·명령은 순서대로 처리하고, 다른 chatId는 동시에 처리한다(진행 메시지 혼입 방지). R5: 전역 동시 처리 채팅 수는 `maxConcurrentChats`(기본 3)로 제한하고, `drain()`으로 진행 중 작업 완료를 기다릴 수 있다. **어댑터는 이벤트를 파이프라인에 넘기고 즉시 반환**(대기하지 않음)해야 polling이 다른 채팅의 업데이트를 계속 받는다.
 - 게시 범위: 모든 게시는 수신 이벤트의 `chatId`로만 호출한다(가드레일 2). 파일명은 `<원본 이름>.<모국어>.md`.
 - 마지막 문서 참조: chatId → `IncomingDoc`(파일 ID 기반 `download()` 클로저 + 메타). 본문·번역문은 플랜 실행 직후 참조를 버린다.
 
@@ -92,6 +92,7 @@ export type OutputPlan =
 - grammY long polling. 문서 핸들러: `message:document` → `IncomingDoc`(메타만). 다운로드는 `download()` 호출 시에만 getFile → 파일 URL fetch. **어댑터 자체가 20MB 초과면 `download()`를 거부**(getFile 호출 없음)하고, 파이프라인은 그 전에 planner의 바이트 가드로 reject한다(이중 방어). R4: getFile 응답의 `file_size`도 검사하고, 본문은 스트림으로 누적하며 상한을 넘는 순간 중단(메타데이터 누락·위조 대비), 요청 전체에 `AbortSignal.timeout`(기본 60초). 파이프라인은 받은 바이트 길이를 다시 확인한다.
 - `postText`는 4,096자 제한에 맞춰 분할 게시 — 공용 함수 `core/textSplit.ts`(`splitForMessenger`: 문단 → 줄 → 문장 → 자소 순, 어댑터와 FakeMessenger가 같은 함수 사용), 순서 보장을 위해 순차 전송. 자소 하나가 상한보다 길면(결합 문자 폭탄) 코드포인트 단위로 잘라 **모든 조각 길이 ≤ 상한**을 보장(R2; 청크 분할도 동일). `postFile`은 sendDocument(InputFile from bytes).
 - 명령(`/full`, `/summary`, `/mode`, `/lang`)은 `start()` 시 `setMyCommands`로 등록해 자동완성 노출(BotFather 수동 등록 불필요). 명령 인자는 `ctx.match`.
+- 디스패치·수명(R5): 문서·명령 핸들러는 파이프라인 호출을 `await`하지 않고 진행 중 집합에 넣은 뒤 즉시 반환(grammY는 업데이트를 순차 처리하므로 대기하면 채팅 간 병렬이 깨진다). 핸들러 오류는 `onError(e, fatal=false)`. `start()`는 `bot.init()`(getMe)과 polling 준비(`onStart`)를 기다린 뒤 resolve — 초기화 실패는 `start()` 예외로 전파. 시작 후 polling이 예기치 않게 끝나면 `onError(e, fatal=true)`; CLI는 종료 코드 1로 반영. `stop()`은 polling 중지 후 진행 중 핸들러를 기다린다.
 - 테스트: 네트워크 0건 — `botInfo` 주입으로 getMe 생략, `api.config.use` 트랜스포머로 Bot API 호출을 가로채 요청 형태(method·payload)를 검증, `bot.handleUpdate`로 업데이트 주입, 파일 다운로드는 주입 fetch.
 - 그룹에서는 봇 프라이버시 모드 이슈로 문서 수신만 처리(문서는 프라이버시 모드에서도 수신됨을 스모크로 확인, 아니면 온보딩 안내에 프라이버시 해제 절차 추가).
 

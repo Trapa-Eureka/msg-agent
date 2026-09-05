@@ -40,10 +40,13 @@ export interface PipelineDeps {
   pairingCode?: string;
   /** Documents producing more chunks than this are rejected (R2). */
   maxChunksPerDoc?: number;
+  /** Chats processed at the same time (R5). */
+  maxConcurrentChats?: number;
 }
 
 const DEFAULT_SUPPORTED = ["pdf", "docx", "txt", "md"] as const;
 const DEFAULT_MAX_CHUNKS_PER_DOC = 50;
+const DEFAULT_MAX_CONCURRENT_CHATS = 3;
 const HOUR_MS = 60 * 60 * 1000;
 const MAX_PROGRESS_UPDATES = 4;
 
@@ -75,11 +78,37 @@ export class Pipeline {
   /** Per-chat serialization: one chat's work runs in order, different chats run concurrently. */
   private enqueue(chatId: string, work: () => Promise<void>): Promise<void> {
     const prev = this.queues.get(chatId) ?? Promise.resolve();
-    const next = prev.then(work, work).finally(() => {
+    const gated = (): Promise<void> => this.withSlot(work);
+    const next = prev.then(gated, gated).finally(() => {
       if (this.queues.get(chatId) === next) this.queues.delete(chatId);
     });
     this.queues.set(chatId, next);
     return next;
+  }
+
+  // ---- global concurrency (R5): at most maxConcurrentChats chats run at once ----
+  private active = 0;
+  private readonly waiters: (() => void)[] = [];
+
+  private async withSlot(work: () => Promise<void>): Promise<void> {
+    const limit = this.deps.maxConcurrentChats ?? DEFAULT_MAX_CONCURRENT_CHATS;
+    if (this.active >= limit) {
+      await new Promise<void>((resolve) => {
+        this.waiters.push(resolve);
+      });
+    }
+    this.active += 1;
+    try {
+      await work();
+    } finally {
+      this.active -= 1;
+      this.waiters.shift()?.();
+    }
+  }
+
+  /** Resolves when every queued document and command has finished (used on shutdown). */
+  async drain(): Promise<void> {
+    while (this.queues.size > 0) await Promise.allSettled([...this.queues.values()]);
   }
 
   handleDocument(doc: IncomingDoc): Promise<void> {

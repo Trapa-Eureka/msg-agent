@@ -103,6 +103,7 @@ export async function runStart(d: StartDeps): Promise<Daemon | number> {
     stopping ??= (async () => {
       d.out(t.stopping);
       await messenger.stop();
+      await pipeline.drain();
       d.logger.info("daemon.stopped");
     })();
     return stopping;
