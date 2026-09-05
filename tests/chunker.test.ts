@@ -69,13 +69,20 @@ describe("chunkDocument", () => {
 
   it("never splits inside a grapheme cluster (surrogate pairs, combining marks, emoji ZWJ)", () => {
     const text = "𠮷野家 و اللُّغَةُ 👨‍👩‍👧‍👦 é".repeat(12);
-    const chunks = chunkDocument({ text, sections: [{ text }] }, 7);
+    const chunks = chunkDocument({ text, sections: [{ text }] }, 12); // ≥ longest grapheme (ZWJ family = 11)
     const joined = chunks.map((c) => c.text).join("");
     expect(hasLoneSurrogate(joined)).toBe(false);
     expect(chunks.some((c) => hasLoneSurrogate(c.text))).toBe(false);
     expect(chunks.some((c) => c.text.endsWith("‍"))).toBe(false);
     expect(chunks.some((c) => c.text.startsWith("́"))).toBe(false);
     expect(squash(joined)).toBe(squash(text));
+  });
+
+  it("never emits a chunk longer than the limit, even for a single oversized grapheme", () => {
+    const text = "x" + "\u0301".repeat(4200);
+    const chunks = chunkDocument({ text, sections: [{ text }] });
+    expect(chunks.every((c) => c.text.length <= 4000)).toBe(true);
+    expect(chunks.map((c) => c.text).join("")).toBe(text);
   });
 
   it("chunks the long English fixture within the default limit in order", () => {

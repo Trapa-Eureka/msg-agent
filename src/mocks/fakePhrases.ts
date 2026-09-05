@@ -12,7 +12,7 @@ export function fakePhrases(lang: string): Phrases {
     skipSameLang: (n) => tag("skipSameLang", lang, n),
     rejectUnsupported: (f, s) => tag("rejectUnsupported", lang, f, s.join(",")),
     rejectTooLarge: (b, m) => tag("rejectTooLarge", lang, b, m),
-    rejectOverMax: (c, m, s) => tag("rejectOverMax", lang, c, m, s),
+    rejectOverMax: (c, m) => tag("rejectOverMax", lang, c, m),
     extractEmpty: (f) => tag("extractEmpty", lang, f),
     extractEncrypted: (f) => tag("extractEncrypted", lang, f),
     extractCorrupt: (f) => tag("extractCorrupt", lang, f),
@@ -29,5 +29,7 @@ export function fakePhrases(lang: string): Phrases {
     paired: () => tag("paired", lang),
     chatAllowed: () => tag("chatAllowed", lang),
     chatDenied: () => tag("chatDenied", lang),
+    rateLimited: (n) => tag("rateLimited", lang, n),
+    dailyBudgetExhausted: () => tag("dailyBudgetExhausted", lang),
   };
 }

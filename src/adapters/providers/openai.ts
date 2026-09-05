@@ -11,6 +11,7 @@ import { ProviderError, err, ok, summaryPrompt, translationPrompt } from "../../
 
 export const OPENAI_DEFAULT_MODEL = "gpt-5";
 export const OPENAI_BASE_URL = "https://api.openai.com/v1";
+const MAX_COMPLETION_TOKENS = 16000;
 
 export interface OpenAIProviderOptions {
   apiKey: string;
@@ -67,6 +68,7 @@ export class OpenAIProvider implements TranslatorProvider {
       method: "POST",
       body: JSON.stringify({
         model: this.model,
+        max_completion_tokens: MAX_COMPLETION_TOKENS,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },

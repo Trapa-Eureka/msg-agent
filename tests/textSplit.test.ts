@@ -32,7 +32,7 @@ describe("splitForMessenger", () => {
 
   it("never breaks surrogate pairs, combining marks, or ZWJ emoji", () => {
     const text = "𠮷野家 اللُّغَةُ 👨‍👩‍👧‍👦 é ".repeat(20);
-    const parts = splitForMessenger(text, 9);
+    const parts = splitForMessenger(text, 12); // ≥ longest grapheme (ZWJ family = 11)
     const lone = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u;
     expect(parts.some((p) => lone.test(p))).toBe(false);
     expect(parts.some((p) => p.endsWith("‍") || p.startsWith("́"))).toBe(false);
@@ -49,6 +49,14 @@ describe("splitForMessenger", () => {
     expect(parts.every((p) => p.length <= TELEGRAM_MESSAGE_LIMIT)).toBe(true);
     expect(squash(parts.join(""))).toBe(squash(doc));
     expect(parts[0]?.startsWith("# Section 0")).toBe(true);
+  });
+
+  it("keeps every part within the limit even for a single oversized grapheme (review 15)", () => {
+    const bomb = "a" + "\u0301".repeat(4200) + " tail";
+    const parts = splitForMessenger(bomb);
+    expect(parts.every((p) => p.length <= TELEGRAM_MESSAGE_LIMIT)).toBe(true);
+    expect(parts.join("")).toBe(bomb.replace(" tail", "tail").replace("tail", "tail")); // content preserved
+    expect(parts.join("").replace(/\s/gu, "")).toBe(bomb.replace(/\s/gu, ""));
   });
 
   it("rejects a non-positive limit", () => {

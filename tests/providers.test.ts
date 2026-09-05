@@ -112,6 +112,18 @@ describe("ClaudeProvider (SDK + injected fetch)", () => {
     expect(supportsFallbacks("claude-haiku-4-5")).toBe(false);
   });
 
+  it("does not let the SDK retry: one HTTP request per attempt by default (review 07)", async () => {
+    const m = mockFetch([
+      { status: 529, body: { type: "error", error: { type: "overloaded_error", message: "x" } } },
+      { status: 529, body: { type: "error", error: { type: "overloaded_error", message: "x" } } },
+    ]);
+    const p = new ClaudeProvider({ apiKey: "k", fetch: m.fetch }); // no maxRetries given
+    await expect(p.translate(chunks.slice(0, 1), "ko", {})).rejects.toMatchObject({
+      kind: "server",
+    });
+    expect(m.calls).toHaveLength(1);
+  });
+
   it("uses the configured model and medium effort for summaries", async () => {
     const m = mockFetch([{ status: 200, body: claudeMessage("- 요약") }]);
     const p = new ClaudeProvider({
@@ -220,6 +232,7 @@ describe("OpenAIProvider (raw fetch)", () => {
     expect(c.headers["content-type"]).toBe("application/json");
     expect(c.body).toMatchObject({
       model: "gpt-5",
+      max_completion_tokens: 16000,
       messages: [{ role: "system" }, { role: "user", content: "Hello" }],
     });
   });

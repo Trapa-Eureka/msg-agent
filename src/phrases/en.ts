@@ -12,9 +12,8 @@ export const en = {
   rejectUnsupported: (f, s) => `"${f}" is not a supported format. Supported: ${s.join(", ")}.`,
   rejectTooLarge: (_b, m) =>
     `The file is larger than the ${megabytes(m)} download limit, so it was not downloaded. Please send a smaller file or split it.`,
-  rejectOverMax: (c, m, s) =>
-    `The document has about ${String(c)} characters, above the ${String(m)} limit for a full translation.` +
-    (s ? " Send /summary to get a summary instead." : ""),
+  rejectOverMax: (c, m) =>
+    `The document has about ${String(c)} characters, above the ${String(m)} limit. Please split the file into smaller parts and send them separately.`,
   extractEmpty: (f) =>
     `No text could be extracted from "${f}". Scanned documents (OCR) are planned for v0.2.`,
   extractEncrypted: (f) => `"${f}" is password-protected. Remove the password and send it again.`,
@@ -37,6 +36,9 @@ export const en = {
     "Paired. You are the owner and this chat is allowed. Send a PDF, DOCX or TXT/MD to translate it.",
   chatAllowed: () => "This chat is now allowed to submit documents.",
   chatDenied: () => "This chat is no longer allowed to submit documents.",
+  rateLimited: (n) =>
+    `This chat reached its limit of ${String(n)} documents per hour. Please try again later.`,
+  dailyBudgetExhausted: () => "Today's translation budget is used up. Please try again tomorrow.",
   unknownError: () =>
     "Something went wrong while processing the document. Please try again; if it keeps failing, restart the bot (npm run cli -- start).",
 } satisfies Phrases;

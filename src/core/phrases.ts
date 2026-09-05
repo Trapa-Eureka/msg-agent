@@ -10,7 +10,7 @@ export interface Phrases {
   skipSameLang(langCode: string): string;
   rejectUnsupported(fileName: string, supported: readonly string[]): string;
   rejectTooLarge(sizeBytes: number, maxBytes: number): string;
-  rejectOverMax(chars: number, maxChars: number, suggestSummary: boolean): string;
+  rejectOverMax(chars: number, maxChars: number): string;
   extractEmpty(fileName: string): string;
   extractEncrypted(fileName: string): string;
   extractCorrupt(fileName: string): string;
@@ -28,6 +28,10 @@ export interface Phrases {
   paired(): string;
   chatAllowed(): string;
   chatDenied(): string;
+  /** Per-chat hourly document limit reached. */
+  rateLimited(perHour: number): string;
+  /** Global daily character budget exhausted. */
+  dailyBudgetExhausted(): string;
 }
 
 export type PhraseKey = keyof Phrases;

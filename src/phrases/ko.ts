@@ -12,9 +12,8 @@ export const ko = {
   rejectUnsupported: (f, s) => `"${f}"은(는) 지원하지 않는 형식입니다. 지원 형식: ${s.join(", ")}.`,
   rejectTooLarge: (_b, m) =>
     `파일이 다운로드 한도 ${megabytes(m)}를 넘어 내려받지 않았습니다. 더 작은 파일로 보내거나 나눠서 보내 주세요.`,
-  rejectOverMax: (c, m, s) =>
-    `문서가 약 ${String(c)}자로 전문 번역 상한(${String(m)}자)을 넘습니다.` +
-    (s ? " 대신 /summary 로 요약을 받을 수 있습니다." : ""),
+  rejectOverMax: (c, m) =>
+    `문서가 약 ${String(c)}자로 처리 상한(${String(m)}자)을 넘습니다. 파일을 더 작게 나눠서 따로 보내 주세요.`,
   extractEmpty: (f) =>
     `"${f}"에서 텍스트를 추출할 수 없습니다. 스캔 문서(OCR)는 v0.2에서 지원 예정입니다.`,
   extractEncrypted: (f) =>
@@ -39,6 +38,9 @@ export const ko = {
     "페어링되었습니다. 소유자로 등록되고 이 대화방이 허용되었습니다. PDF, DOCX, TXT/MD를 보내면 번역합니다.",
   chatAllowed: () => "이 대화방에서 문서를 받도록 허용했습니다.",
   chatDenied: () => "이 대화방의 문서 수신 허용을 해제했습니다.",
+  rateLimited: (n) =>
+    `이 대화방의 시간당 문서 한도(${String(n)}건)에 도달했습니다. 잠시 후 다시 시도해 주세요.`,
+  dailyBudgetExhausted: () => "오늘의 번역 예산을 모두 사용했습니다. 내일 다시 시도해 주세요.",
   unknownError: () =>
     "문서를 처리하는 중 문제가 생겼습니다. 다시 시도해 주세요. 계속 실패하면 봇을 재시작하세요(npm run cli -- start).",
 } satisfies Phrases;

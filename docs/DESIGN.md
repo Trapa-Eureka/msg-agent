@@ -68,7 +68,7 @@ export type OutputPlan =
 1. `IncomingDoc` 수신 → 크기·형식 가드 (미지원/초과 → `reject` 플랜, 사유는 모국어 문구)
 2. 진행 알림 게시 → 다운로드 → 추출기 라우팅(`supports`: MIME 우선, `application/octet-stream` 등 불명확하면 확장자로 판정) → `ExtractedDoc`. 섹션 구조화는 공용 휴리스틱(`core/sections.ts`: Markdown 제목·짧은 무종결 단독 행 = 제목, 빈 줄 = 문단)
 3. 언어 감지 — franc(`core/detector.ts`). 신뢰도 = 표본 글자 수 계수(100자에서 1) × 표본 전·후반 감지 일치도(둘 다 일치 1 / 하나 0.7 / 없음 0.4). **0.7 이상**일 때만 감지 언어 = 모국어면 `skip_same_lang`, 미만이면 `sourceLangHint` 없이 번역 프롬프트에 위임. 매크로언어 구성원(arb→ar, cmn→zh 등)은 `core/lang.ts`에서 정규화
-4. `outputPlanner.decidePlan`: 판정 순서 = 미지원 형식 → 바이트 상한(다운로드 전) → 같은 언어(신규 업로드만) → `maxChars` 초과(`/full`도 우회 불가, 요약 제안) → `/summary`·`/full` 요청 → 모드×임계치(임계치 이하 = 짧음, 포함). 결과는 `PlanDecision`(종류·거절 사유만, 내용 없음)
+4. `outputPlanner.decidePlan`: 판정 순서 = 미지원 형식 → 바이트 상한(다운로드 전) → 같은 언어(신규 업로드만) → `maxChars` 초과(`/full`·`/summary`도 우회 불가, 파일 분할 안내) → `/summary`·`/full` 요청 → 모드×임계치(임계치 이하 = 짧음, 포함). 결과는 `PlanDecision`(종류·거절 사유만, 내용 없음). **길이 기준은 정규화된 추출 텍스트의 `length`(공백 포함)** — 프로바이더에 실제로 보내는 문자열과 같은 척도(R2; `countChars`는 표시용). 추가 가드(R2): 청크 수 > `maxChunksPerDoc`(기본 50) → 거절, 채팅별 시간당 문서·재실행 수 > `limits.docsPerChatPerHour` → `rateLimited`, 전역 일일 누적 문자 > `limits.dailyChars` → `dailyBudgetExhausted`(모두 메모리 카운터, 메타만).
 5. 전문 경로: `chunker`(섹션 → 문단 → 문장 → 자소 클러스터 순으로 분할, 청크당 기본 4,000자, 각 청크는 섹션 제목을 `# `로 포함, 섹션 경계는 넘지 않음) → `translate` (진행 상태 n/m 갱신) → `assembleChunks`로 순번대로 조립(누락 청크가 있으면 게시하지 않음)
 6. 요약 경로: `summarize` + 전문 번역은 .md 파일 조립. full 모드에서 임계치 초과면 `file_full`(요약 호출 없이 머리말 + 전문 파일)
 7. 어댑터로 플랜 실행 → 임시 데이터 즉시 폐기 (가드레일 1)
@@ -77,7 +77,7 @@ export type OutputPlan =
 **조립 규칙(core/pipeline.ts)**
 - 의존성 주입: `MessengerAdapter`, `DocumentExtractor[]`, `LanguageDetector`, `TranslatorProvider`, `SettingsStore`(config 읽기/저장 — 파일 IO는 어댑터), `phrasesFor(lang) → Phrases`(사용자 문구 팩), `Logger`(메타데이터 전용), `Clock`. 코어에는 문자열 리터럴이 없다 — 모든 사용자 대면 문구는 `Phrases` 키를 통해서만 나간다.
 - 문구 팩(`src/phrases/`): `ko`·`en` 팩이 `satisfies Phrases`로 키 누락 시 컴파일 실패. `phrasesFor(lang)`는 ISO 639 어떤 표기든 정규화해 팩을 고르고 없으면 **en으로 폴백**. 언어 파라미터는 코드로 받고 각 팩이 `Intl.DisplayNames`로 자기 언어의 언어명을 렌더한다("한국어"/"Korean"). 문구는 메타데이터(파일명·개수·코드)만 담는다.
-- 번역 호출은 **청크 1개당 `translate([chunk])` 1회**. 실패 시 `retryable`이면 같은 청크를 1회 재시도, 그래도 실패면 번역문을 전혀 게시하지 않고 `translationFailed(done, total)` 안내. 정상 경로의 프로바이더 호출 수 = 청크 수(+ 요약 1).
+- 번역 호출은 **청크 1개당 `translate([chunk])` 1회**. 실패 시 `retryable`이면 같은 청크를 1회 재시도, 그래도 실패면 번역문을 전혀 게시하지 않고 `translationFailed(done, total)` 안내. 정상 경로의 프로바이더 호출 수 = 청크 수(+ 요약 1). **재시도 책임은 파이프라인 한 곳** — Claude SDK는 `maxRetries: 0`으로 고정해 청크당 HTTP 요청 최대 2회(R2).
 - 진행 알림: 추출 시작 시 1회, 번역은 청크 수가 2개 이상일 때 시작 시 `0/m`과 이후 약 1/4 지점마다(최대 4회) `n/m`, 요약 시작 시 1회.
 - 채팅별 직렬화: 같은 chatId의 문서·명령은 순서대로 처리하고, 다른 chatId는 동시에 처리한다(진행 메시지 혼입 방지).
 - 게시 범위: 모든 게시는 수신 이벤트의 `chatId`로만 호출한다(가드레일 2). 파일명은 `<원본 이름>.<모국어>.md`.
@@ -90,7 +90,7 @@ export type OutputPlan =
 ## 4. Telegram 어댑터 메모
 
 - grammY long polling. 문서 핸들러: `message:document` → `IncomingDoc`(메타만). 다운로드는 `download()` 호출 시에만 getFile → 파일 URL fetch. **어댑터 자체가 20MB 초과면 `download()`를 거부**(getFile 호출 없음)하고, 파이프라인은 그 전에 planner의 바이트 가드로 reject한다(이중 방어).
-- `postText`는 4,096자 제한에 맞춰 분할 게시 — 공용 함수 `core/textSplit.ts`(`splitForMessenger`: 문단 → 줄 → 문장 → 자소 순, 어댑터와 FakeMessenger가 같은 함수 사용), 순서 보장을 위해 순차 전송. `postFile`은 sendDocument(InputFile from bytes).
+- `postText`는 4,096자 제한에 맞춰 분할 게시 — 공용 함수 `core/textSplit.ts`(`splitForMessenger`: 문단 → 줄 → 문장 → 자소 순, 어댑터와 FakeMessenger가 같은 함수 사용), 순서 보장을 위해 순차 전송. 자소 하나가 상한보다 길면(결합 문자 폭탄) 코드포인트 단위로 잘라 **모든 조각 길이 ≤ 상한**을 보장(R2; 청크 분할도 동일). `postFile`은 sendDocument(InputFile from bytes).
 - 명령(`/full`, `/summary`, `/mode`, `/lang`)은 `start()` 시 `setMyCommands`로 등록해 자동완성 노출(BotFather 수동 등록 불필요). 명령 인자는 `ctx.match`.
 - 테스트: 네트워크 0건 — `botInfo` 주입으로 getMe 생략, `api.config.use` 트랜스포머로 Bot API 호출을 가로채 요청 형태(method·payload)를 검증, `bot.handleUpdate`로 업데이트 주입, 파일 다운로드는 주입 fetch.
 - 그룹에서는 봇 프라이버시 모드 이슈로 문서 수신만 처리(문서는 프라이버시 모드에서도 수신됨을 스모크로 확인, 아니면 온보딩 안내에 프라이버시 해제 절차 추가).
@@ -111,7 +111,8 @@ export type OutputPlan =
   "provider": { "kind": "claude", "apiKeyRef": "env:ANTHROPIC_API_KEY" },
   "messenger": { "kind": "telegram", "tokenRef": "literal:123456:ABC..." },
   "mode": "smart", "inlineThresholdChars": 3000, "maxChars": 120000,
-  "access": { "ownerUserId": "123456789", "allowedChatIds": ["123456789", "-1001234567890"] }
+  "access": { "ownerUserId": "123456789", "allowedChatIds": ["123456789", "-1001234567890"] },
+  "limits": { "docsPerChatPerHour": 20, "dailyChars": 1000000 }
 }
 ```
 

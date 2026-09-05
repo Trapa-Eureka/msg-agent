@@ -57,7 +57,8 @@ export class ClaudeProvider implements TranslatorProvider {
     this.client = new Anthropic({
       apiKey: opts.apiKey,
       ...(opts.fetch === undefined ? {} : { fetch: opts.fetch }),
-      ...(opts.maxRetries === undefined ? {} : { maxRetries: opts.maxRetries }),
+      // Retries belong to the pipeline (one per chunk); the SDK must not add its own (R2 / review 07).
+      maxRetries: opts.maxRetries ?? 0,
     });
   }
 

@@ -18,7 +18,7 @@ const CALLS: Record<PhraseKey, (p: Phrases) => string> = {
   skipSameLang: (p) => p.skipSameLang("ko"),
   rejectUnsupported: (p) => p.rejectUnsupported("sheet.xlsx", ["pdf", "docx", "txt", "md"]),
   rejectTooLarge: (p) => p.rejectTooLarge(25 * 1024 * 1024, 20 * 1024 * 1024),
-  rejectOverMax: (p) => p.rejectOverMax(150000, 120000, true),
+  rejectOverMax: (p) => p.rejectOverMax(150000, 120000),
   extractEmpty: (p) => p.extractEmpty("scan.pdf"),
   extractEncrypted: (p) => p.extractEncrypted("locked.pdf"),
   extractCorrupt: (p) => p.extractCorrupt("bad.docx"),
@@ -35,6 +35,8 @@ const CALLS: Record<PhraseKey, (p: Phrases) => string> = {
   paired: (p) => p.paired(),
   chatAllowed: (p) => p.chatAllowed(),
   chatDenied: (p) => p.chatDenied(),
+  rateLimited: (p) => p.rateLimited(20),
+  dailyBudgetExhausted: (p) => p.dailyBudgetExhausted(),
 };
 const KEYS = Object.keys(CALLS) as PhraseKey[];
 
@@ -60,8 +62,6 @@ describe("phrase packs", () => {
       expect(r.rejectUnsupported).toContain("pdf, docx, txt, md");
       expect(r.rejectTooLarge).toContain("20.0 MB");
       expect(r.rejectOverMax).toContain("150000");
-      expect(r.rejectOverMax).toContain("/summary");
-      expect(pack.rejectOverMax(1, 1, false)).not.toContain("/summary");
       expect(r.translationFailed).toContain("2/7");
       expect(r.modeInvalid).toContain("smart, full, summary");
       expect(r.langInvalid).toContain("Klingon");
