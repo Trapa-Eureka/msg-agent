@@ -222,6 +222,25 @@ export class Pipeline {
     // 2. Download + extract
     await this.post(chatId, phrases.progressExtracting(fileName), messageId);
     const bytes = await doc.download();
+    if (bytes.byteLength > this.deps.maxBytes) {
+      await this.execute(
+        chatId,
+        messageId,
+        this.rejectPlan(
+          { kind: "reject", reason: "too_large_bytes" },
+          phrases,
+          fileName,
+          0,
+          config,
+        ),
+      );
+      this.deps.logger.info("doc.rejected", {
+        ...log,
+        reason: "too_large_bytes",
+        actualBytes: bytes.byteLength,
+      });
+      return;
+    }
     const extracted = await extractor.extract(bytes);
     if (!extracted.ok) {
       const text =

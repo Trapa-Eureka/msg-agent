@@ -1,4 +1,5 @@
 // OpenAI provider — Chat Completions over injected fetch (tests use a mock fetch; no network).
+import { z } from "zod";
 import type {
   Chunk,
   ExtractedDoc,
@@ -18,11 +19,21 @@ export interface OpenAIProviderOptions {
   model?: string;
   fetch?: typeof fetch;
   baseUrl?: string;
+  timeoutMs?: number;
 }
 
-interface ChatCompletion {
-  choices?: { message?: { content?: string | null }; finish_reason?: string }[];
-}
+const OPENAI_TIMEOUT_MS = 90_000;
+/** Boundary schema — anything else is a `bad_response`, never a TypeError (review 14 / SEC-12). */
+const completionSchema = z.object({
+  choices: z
+    .array(
+      z.object({
+        message: z.object({ content: z.string().nullable().optional() }).optional(),
+        finish_reason: z.string().nullable().optional(),
+      }),
+    )
+    .min(1),
+});
 
 function statusToError(status: number, detail: string): ProviderError {
   if (status === 401 || status === 403) return new ProviderError("auth", false, status, detail);
@@ -35,6 +46,7 @@ export class OpenAIProvider implements TranslatorProvider {
   private readonly fetchImpl: typeof fetch;
   private readonly baseUrl: string;
   private readonly apiKey: string;
+  private readonly timeoutMs: number;
   readonly model: string;
 
   constructor(opts: OpenAIProviderOptions) {
@@ -42,23 +54,26 @@ export class OpenAIProvider implements TranslatorProvider {
     this.model = opts.model ?? OPENAI_DEFAULT_MODEL;
     this.fetchImpl = opts.fetch ?? fetch;
     this.baseUrl = (opts.baseUrl ?? OPENAI_BASE_URL).replace(/\/$/u, "");
+    this.timeoutMs = opts.timeoutMs ?? OPENAI_TIMEOUT_MS;
   }
 
   private async request(path: string, init: RequestInit): Promise<Response> {
     try {
       return await this.fetchImpl(`${this.baseUrl}${path}`, {
         ...init,
+        signal: AbortSignal.timeout(this.timeoutMs),
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           "Content-Type": "application/json",
         },
       });
     } catch (e) {
+      const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
       throw new ProviderError(
         "network",
         true,
         undefined,
-        e instanceof Error ? e.name : "fetch_failed",
+        timedOut ? "timeout" : e instanceof Error ? e.name : "fetch_failed",
       );
     }
   }
@@ -76,13 +91,15 @@ export class OpenAIProvider implements TranslatorProvider {
       }),
     });
     if (!res.ok) throw statusToError(res.status, `http_${String(res.status)}`);
-    let body: ChatCompletion;
+    let raw: unknown;
     try {
-      body = (await res.json()) as ChatCompletion;
+      raw = await res.json();
     } catch {
       throw new ProviderError("bad_response", true, res.status, "invalid_json");
     }
-    const choice = body.choices?.[0];
+    const body = completionSchema.safeParse(raw);
+    if (!body.success) throw new ProviderError("bad_response", true, res.status, "schema");
+    const choice = body.data.choices[0];
     const text = choice?.message?.content?.trim() ?? "";
     if (choice?.finish_reason === "content_filter")
       throw new ProviderError("refusal", false, res.status, "content_filter");

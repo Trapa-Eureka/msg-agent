@@ -536,3 +536,17 @@ describe("cost and rate guards (R2)", () => {
     expect(h.translator.calls.summarize).toBe(0);
   });
 });
+
+describe("download re-check (R4)", () => {
+  it("rejects when the downloaded bytes exceed the limit even though the metadata said otherwise", async () => {
+    const h = harness();
+    await h.messenger.emitDocument({
+      chatId: "c",
+      fileName: "doc.pdf",
+      sizeBytes: 10,
+      bytes: new Uint8Array(20 * MB + 1),
+    });
+    expect(h.messenger.textsFor("c").at(-1)).toMatch(/^\[rejectTooLarge ko /u);
+    expect(h.extractor.extracted).toEqual([]);
+  });
+});

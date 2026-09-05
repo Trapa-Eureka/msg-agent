@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Transformer } from "grammy";
 import type { Update, UserFromGetMe } from "grammy/types";
-import { TELEGRAM_MAX_DOWNLOAD_BYTES, TelegramAdapter } from "../src/adapters/telegramAdapter.js";
+import {
+  TELEGRAM_MAX_DOWNLOAD_BYTES,
+  TelegramAdapter,
+  readCapped,
+} from "../src/adapters/telegramAdapter.js";
 import type { IncomingCommand, IncomingDoc } from "../src/core/index.js";
 
 const botInfo: UserFromGetMe = {
@@ -147,6 +151,56 @@ describe("TelegramAdapter", () => {
     expect(doc?.sizeBytes).toBe(TELEGRAM_MAX_DOWNLOAD_BYTES + 1);
     await expect(doc?.download()).rejects.toThrow(/exceeds download limit/);
     expect(api.calls).toEqual([]);
+  });
+
+  it("caps the actual download: oversized getFile size, content-length, or body stream all fail (SEC-08)", async () => {
+    // 1) getFile reports a size above the limit -> no fetch at all
+    const calls: string[] = [];
+    const adapter1 = new TelegramAdapter({
+      token: "t",
+      botInfo,
+      maxDownloadBytes: 8,
+      apiTransformer: (_prev, method) => {
+        return Promise.resolve({
+          ok: true,
+          result:
+            method === "getFile"
+              ? { file_id: "f", file_unique_id: "u", file_size: 32, file_path: "p" }
+              : true,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any);
+      },
+      fetch: (i) => {
+        calls.push(typeof i === "string" ? i : i instanceof URL ? i.href : i.url);
+        return Promise.resolve(new Response(new Uint8Array(32)));
+      },
+    });
+    let doc1: IncomingDoc | undefined;
+    adapter1.onDocument((d) => {
+      doc1 = d;
+      return Promise.resolve();
+    });
+    await adapter1.bot.handleUpdate(documentUpdate({ chatId: 1, sizeBytes: 0 })); // metadata missing -> 0
+    await expect(doc1?.download()).rejects.toThrow(/exceeds download limit/);
+    expect(calls).toEqual([]);
+
+    // 2) body stream longer than the limit -> rejected while streaming, without buffering everything
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        for (let i = 0; i < 8; i++) c.enqueue(new Uint8Array(4));
+        c.close();
+      },
+    });
+    await expect(readCapped(new Response(stream), 8)).rejects.toThrow(/exceeds download limit/);
+
+    // 3) content-length above the limit -> rejected before reading
+    const declared = new Response(new Uint8Array(4), { headers: { "content-length": "999" } });
+    await expect(readCapped(declared, 8)).rejects.toThrow(/999/);
+
+    // 4) within the limit -> full bytes
+    expect(await readCapped(new Response(new Uint8Array([1, 2, 3])), 8)).toEqual(
+      new Uint8Array([1, 2, 3]),
+    );
   });
 
   it("routes the four commands with optional arguments, ignoring others", async () => {
