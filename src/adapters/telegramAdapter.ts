@@ -12,8 +12,18 @@ export const TELEGRAM_COMMANDS: readonly { command: CommandName; description: st
   { command: "summary", description: "마지막 문서 요약 다시" },
   { command: "mode", description: "출력 모드 변경: smart | full | summary" },
   { command: "lang", description: "모국어 변경 (예: /lang ko)" },
+  { command: "allow", description: "(소유자) 이 대화방 허용" },
+  { command: "deny", description: "(소유자) 이 대화방 허용 해제" },
 ];
-const COMMAND_NAMES: readonly CommandName[] = ["full", "summary", "mode", "lang"];
+const COMMAND_NAMES: readonly CommandName[] = [
+  "start",
+  "full",
+  "summary",
+  "mode",
+  "lang",
+  "allow",
+  "deny",
+];
 
 export interface TelegramAdapterOptions {
   token: string;
@@ -54,8 +64,10 @@ export class TelegramAdapter implements MessengerAdapter {
       if (name === undefined || !COMMAND_NAMES.includes(name)) return;
       const arg =
         typeof ctx.match === "string" && ctx.match.trim() !== "" ? ctx.match.trim() : undefined;
+      const userId = ctx.from === undefined ? undefined : String(ctx.from.id);
       await this.cmdHandler?.({
         chatId: String(ctx.chat.id),
+        ...(userId === undefined ? {} : { userId }),
         name,
         ...(arg === undefined ? {} : { arg }),
       });
@@ -77,9 +89,11 @@ export class TelegramAdapter implements MessengerAdapter {
     const maxBytes = this.maxBytes;
     const fetchImpl = this.fetchImpl;
     const token = this.token;
+    const userId = String(msg.from.id);
     return {
       chatId: String(msg.chat.id),
       messageId: String(msg.message_id),
+      userId,
       fileName: doc.file_name ?? "document",
       mime: doc.mime_type ?? "application/octet-stream",
       sizeBytes,

@@ -23,10 +23,16 @@ describe("FakeMessenger", () => {
     });
     await m.emitCommand({ chatId: "c1", name: "mode", arg: "full" });
     expect(docs[0]).toBe(doc);
-    expect(doc).toMatchObject({ chatId: "c1", messageId: "1", fileName: "a.pdf", sizeBytes: 2 });
+    expect(doc).toMatchObject({
+      chatId: "c1",
+      messageId: "1",
+      userId: "owner",
+      fileName: "a.pdf",
+      sizeBytes: 2,
+    });
     expect(await doc.download()).toEqual(new Uint8Array([1, 2]));
     expect(m.downloads).toEqual(["1"]);
-    expect(cmds).toEqual([{ chatId: "c1", name: "mode", arg: "full" }]);
+    expect(cmds).toEqual([{ userId: "owner", chatId: "c1", name: "mode", arg: "full" }]);
 
     await m.postText("c1", "hi", "1");
     await m.postFile("c2", "t.md", new Uint8Array([7]), "cap");

@@ -48,6 +48,7 @@ describe("configStore", () => {
       mode: "smart",
       inlineThresholdChars: 3000,
       maxChars: 120000,
+      access: { allowedChatIds: [] },
     });
   });
 

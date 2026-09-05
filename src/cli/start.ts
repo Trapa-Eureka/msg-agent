@@ -19,6 +19,7 @@ import type { EnvSource } from "../adapters/configStore.js";
 import { loadConfig, resolveSecret } from "../adapters/configStore.js";
 import { FileSettings } from "../adapters/fileSettings.js";
 import { TELEGRAM_MAX_DOWNLOAD_BYTES } from "../adapters/telegramAdapter.js";
+import { randomInt } from "node:crypto";
 import { text, uiLangFor } from "./text.js";
 
 export interface StartDeps {
@@ -71,7 +72,12 @@ export async function runStart(d: StartDeps): Promise<Daemon | number> {
   );
   const messenger = d.buildMessenger(token.value);
   const settings = new FileSettings(config, d.configPath);
+  const pairingCode =
+    config.access.ownerUserId === undefined
+      ? String(randomInt(0, 1_000_000)).padStart(6, "0")
+      : undefined;
   const pipeline = new Pipeline({
+    ...(pairingCode === undefined ? {} : { pairingCode }),
     messenger,
     extractors: createExtractors(),
     detector: new FrancDetector(),
@@ -90,6 +96,7 @@ export async function runStart(d: StartDeps): Promise<Daemon | number> {
     mode: config.mode,
   });
   d.out(t.starting(d.botUsername, config.nativeLang));
+  if (pairingCode !== undefined) d.out(t.pairingHint(pairingCode));
 
   let stopping: Promise<void> | undefined;
   const stop = (): Promise<void> => {

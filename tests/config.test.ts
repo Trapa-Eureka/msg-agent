@@ -30,6 +30,20 @@ describe("parseConfig", () => {
     expect(r.value.maxChars).toBe(DEFAULT_MAX_CHARS);
   });
 
+  it("defaults access to deny-all and rejects unknown keys (strict schema)", () => {
+    const r = parseConfig(valid);
+    expect(r.ok && r.value.access).toEqual({ allowedChatIds: [] });
+    const issues = issuesOf({ ...valid, allowedChatIds: ["1"] });
+    expect(issues).toEqual([
+      { code: "invalid_value", path: "", detail: "unknown key: allowedChatIds" },
+    ]);
+    const nested = issuesOf({
+      ...valid,
+      access: { ownerUserId: "1", allowedChatIds: ["1"], extra: true },
+    });
+    expect(nested[0]?.path).toBe("access");
+  });
+
   it("canonicalizes the native language code", () => {
     const r = parseConfig({ ...valid, nativeLang: "KOR" });
     expect(r.ok && r.value.nativeLang).toBe("ko");

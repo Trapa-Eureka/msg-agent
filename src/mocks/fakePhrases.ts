@@ -26,5 +26,8 @@ export function fakePhrases(lang: string): Phrases {
     langChanged: (n) => tag("langChanged", lang, n),
     langInvalid: (a) => tag("langInvalid", lang, a),
     unknownError: () => tag("unknownError", lang),
+    paired: () => tag("paired", lang),
+    chatAllowed: () => tag("chatAllowed", lang),
+    chatDenied: () => tag("chatDenied", lang),
   };
 }

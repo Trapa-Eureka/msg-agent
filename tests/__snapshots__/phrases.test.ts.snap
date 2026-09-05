@@ -2,6 +2,8 @@
 
 exports[`phrase packs > en renders every key (snapshot) 1`] = `
 {
+  "chatAllowed": "This chat is now allowed to submit documents.",
+  "chatDenied": "This chat is no longer allowed to submit documents.",
   "extractCorrupt": ""bad.docx" could not be read. The file may be damaged; try re-exporting it.",
   "extractEmpty": "No text could be extracted from "scan.pdf". Scanned documents (OCR) are planned for v0.2.",
   "extractEncrypted": ""locked.pdf" is password-protected. Remove the password and send it again.",
@@ -12,6 +14,7 @@ exports[`phrase packs > en renders every key (snapshot) 1`] = `
   "modeChanged": "Output mode set to summary.",
   "modeInvalid": "Unknown mode "loud". Use one of: smart, full, summary. Example: /mode smart",
   "noLastDocument": "No document has been received in this chat yet. Upload a PDF, DOCX or TXT/MD file first.",
+  "paired": "Paired. You are the owner and this chat is allowed. Send a PDF, DOCX or TXT/MD to translate it.",
   "progressExtracting": "Got "contract.pdf". Extracting text…",
   "progressSummarizing": "Writing the summary…",
   "progressTranslating": "Translating… 3/7 chunks",
@@ -27,6 +30,8 @@ exports[`phrase packs > en renders every key (snapshot) 1`] = `
 
 exports[`phrase packs > ko renders every key (snapshot) 1`] = `
 {
+  "chatAllowed": "이 대화방에서 문서를 받도록 허용했습니다.",
+  "chatDenied": "이 대화방의 문서 수신 허용을 해제했습니다.",
   "extractCorrupt": ""bad.docx"을(를) 읽을 수 없습니다. 파일이 손상되었을 수 있으니 다시 내보내서 보내 주세요.",
   "extractEmpty": ""scan.pdf"에서 텍스트를 추출할 수 없습니다. 스캔 문서(OCR)는 v0.2에서 지원 예정입니다.",
   "extractEncrypted": ""locked.pdf"은(는) 암호로 보호된 파일입니다. 암호를 해제한 뒤 다시 보내 주세요.",
@@ -37,6 +42,7 @@ exports[`phrase packs > ko renders every key (snapshot) 1`] = `
   "modeChanged": "출력 모드를 summary(으)로 변경했습니다.",
   "modeInvalid": "알 수 없는 모드 "loud"입니다. smart, full, summary 중 하나를 사용하세요. 예: /mode smart",
   "noLastDocument": "이 대화방에서 받은 문서가 아직 없습니다. PDF, DOCX 또는 TXT/MD 파일을 먼저 올려 주세요.",
+  "paired": "페어링되었습니다. 소유자로 등록되고 이 대화방이 허용되었습니다. PDF, DOCX, TXT/MD를 보내면 번역합니다.",
   "progressExtracting": ""contract.pdf" 받았습니다. 텍스트를 추출하는 중…",
   "progressSummarizing": "요약을 작성하는 중…",
   "progressTranslating": "번역 중… 3/7 청크",

@@ -107,6 +107,7 @@ describe("TelegramAdapter", () => {
     expect(docs[0]).toMatchObject({
       chatId: "-100123",
       messageId: "7",
+      userId: "5",
       fileName: "contract.pdf",
       mime: "application/pdf",
       sizeBytes: 1234,
@@ -161,17 +162,21 @@ describe("TelegramAdapter", () => {
       "/mode full",
       "/lang ko",
       "/lang@message_bot ja",
-      "/start",
+      "/start 123456",
+      "/allow",
+      "/help",
       "hello",
     ]) {
       await adapter.bot.handleUpdate(commandUpdate(t, 9));
     }
     expect(cmds).toEqual([
-      { chatId: "9", name: "full" },
-      { chatId: "9", name: "summary" },
-      { chatId: "9", name: "mode", arg: "full" },
-      { chatId: "9", name: "lang", arg: "ko" },
-      { chatId: "9", name: "lang", arg: "ja" },
+      { chatId: "9", userId: "5", name: "full" },
+      { chatId: "9", userId: "5", name: "summary" },
+      { chatId: "9", userId: "5", name: "mode", arg: "full" },
+      { chatId: "9", userId: "5", name: "lang", arg: "ko" },
+      { chatId: "9", userId: "5", name: "lang", arg: "ja" },
+      { chatId: "9", userId: "5", name: "start", arg: "123456" },
+      { chatId: "9", userId: "5", name: "allow" },
     ]);
   });
 
@@ -214,7 +219,7 @@ describe("TelegramAdapter", () => {
     const set = api.calls.find((c) => c.method === "setMyCommands");
     expect(
       (set?.payload as { commands: { command: string }[] }).commands.map((c) => c.command),
-    ).toEqual(["full", "summary", "mode", "lang"]);
+    ).toEqual(["full", "summary", "mode", "lang", "allow", "deny"]);
     await adapter.stop();
   });
 });

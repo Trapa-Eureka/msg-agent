@@ -24,6 +24,7 @@ interface Text {
   saved: (path: string) => string;
   invite: string;
   starting: (username: string | undefined, lang: string) => string;
+  pairingHint: (code: string) => string;
   stopping: string;
   statusTitle: string;
   botOk: (username: string) => string;
@@ -49,6 +50,8 @@ const ko: Text = {
     "봇을 원하는 대화방(1:1 또는 그룹)에 초대하세요. 그룹이면 @BotFather에서 /setprivacy → Disable로 프라이버시 모드를 꺼야 파일을 받을 수 있습니다. 시작: npm run cli -- start",
   starting: (u, l) => `봇 ${u === undefined ? "" : `@${u} `}시작 (모국어 ${l}). 종료: Ctrl+C`,
   stopping: "종료 중… 진행 중인 작업을 정리합니다.",
+  pairingHint: (c) =>
+    `아직 소유자가 없습니다. Telegram에서 봇에게  /start ${c}  를 보내 페어링하세요 (이 코드는 이번 실행에서만 유효).`,
   statusTitle: "msg-agent 상태",
   botOk: (u) => `봇 연결: 정상 (@${u})`,
   botFail: "봇 연결: 실패",
@@ -74,6 +77,8 @@ const en: Text = {
   starting: (u, l) =>
     `Bot ${u === undefined ? "" : `@${u} `}starting (native language ${l}). Stop with Ctrl+C`,
   stopping: "Stopping… finishing in-flight work.",
+  pairingHint: (c) =>
+    `No owner yet. Send  /start ${c}  to the bot in Telegram to pair (code valid for this run only).`,
   statusTitle: "msg-agent status",
   botOk: (u) => `Bot connection: ok (@${u})`,
   botFail: "Bot connection: failed",

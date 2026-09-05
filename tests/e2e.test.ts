@@ -39,6 +39,7 @@ beforeEach(async () => {
       nativeLang: "ko",
       provider: { kind: "claude", apiKeyRef: "env:ANTHROPIC_API_KEY" },
       messenger: { kind: "telegram", tokenRef: "env:TELEGRAM_BOT_TOKEN" },
+      access: { ownerUserId: "owner", allowedChatIds: [] },
     },
     configPath,
   );

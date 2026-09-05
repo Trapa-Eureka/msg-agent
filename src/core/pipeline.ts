@@ -37,6 +37,8 @@ export interface PipelineDeps {
   chunkChars?: number;
   /** Extensions listed in the unsupported-format message. */
   supportedFormats?: readonly string[];
+  /** One-time pairing code printed by `start` while no owner is configured (R1). */
+  pairingCode?: string;
 }
 
 const DEFAULT_SUPPORTED = ["pdf", "docx", "txt", "md"] as const;
@@ -53,7 +55,10 @@ export class Pipeline {
   private readonly chunkChars: number;
   private readonly supported: readonly string[];
 
-  constructor(private readonly deps: PipelineDeps) {
+  private readonly deps: PipelineDeps;
+
+  constructor(deps: PipelineDeps) {
+    this.deps = { ...deps };
     this.chunkChars = deps.chunkChars ?? DEFAULT_CHUNK_CHARS;
     this.supported = deps.supportedFormats ?? DEFAULT_SUPPORTED;
   }
@@ -75,13 +80,52 @@ export class Pipeline {
   }
 
   handleDocument(doc: IncomingDoc): Promise<void> {
+    if (!this.canSubmit(doc.chatId, doc.userId)) {
+      this.deny("document", doc.chatId, doc.userId);
+      return Promise.resolve();
+    }
     return this.enqueue(doc.chatId, () =>
       this.guarded(doc.chatId, () => this.processDocument(doc, "auto")),
     );
   }
 
   handleCommand(cmd: IncomingCommand): Promise<void> {
+    if (!this.commandAllowed(cmd)) {
+      this.deny(cmd.name, cmd.chatId, cmd.userId);
+      return Promise.resolve();
+    }
     return this.enqueue(cmd.chatId, () => this.guarded(cmd.chatId, () => this.processCommand(cmd)));
+  }
+
+  // ---- access control (R1): default deny, silent ----
+
+  private isOwner(userId: string | undefined): boolean {
+    const owner = this.deps.settings.get().access.ownerUserId;
+    return owner !== undefined && userId !== undefined && userId === owner;
+  }
+
+  /** Documents and re-runs: allowed chat, or the owner anywhere. */
+  private canSubmit(chatId: string, userId: string | undefined): boolean {
+    return this.deps.settings.get().access.allowedChatIds.includes(chatId) || this.isOwner(userId);
+  }
+
+  private commandAllowed(cmd: IncomingCommand): boolean {
+    switch (cmd.name) {
+      case "start":
+        return true; // pairing is validated by the code itself
+      case "full":
+      case "summary":
+        return this.canSubmit(cmd.chatId, cmd.userId);
+      case "mode":
+      case "lang":
+      case "allow":
+      case "deny":
+        return this.isOwner(cmd.userId);
+    }
+  }
+
+  private deny(kind: string, chatId: string, userId: string | undefined): void {
+    this.deps.logger.warn("access.denied", { kind, chatId, userId: userId ?? "-" });
   }
 
   private async guarded(chatId: string, work: () => Promise<void>): Promise<void> {
@@ -356,6 +400,34 @@ export class Pipeline {
       hasArg: cmd.arg !== undefined,
     });
     switch (cmd.name) {
+      case "start": {
+        await this.pair(cmd, config, phrases);
+        return;
+      }
+      case "allow":
+      case "deny": {
+        const current = config.access.allowedChatIds;
+        const next =
+          cmd.name === "allow"
+            ? current.includes(cmd.chatId)
+              ? current
+              : [...current, cmd.chatId]
+            : current.filter((id) => id !== cmd.chatId);
+        await this.deps.settings.set({
+          ...config,
+          access: { ...config.access, allowedChatIds: next },
+        });
+        this.deps.logger.info("access.changed", {
+          action: cmd.name,
+          chatId: cmd.chatId,
+          allowedCount: next.length,
+        });
+        await this.post(
+          cmd.chatId,
+          cmd.name === "allow" ? phrases.chatAllowed() : phrases.chatDenied(),
+        );
+        return;
+      }
       case "full":
       case "summary": {
         const doc = this.lastDoc.get(cmd.chatId);
@@ -387,6 +459,30 @@ export class Pipeline {
         return;
       }
     }
+  }
+
+  /** `/start <code>`: registers the sender as owner (once) and allows the chat. Wrong or absent code is ignored. */
+  private async pair(cmd: IncomingCommand, config: Config, phrases: Phrases): Promise<void> {
+    if (config.access.ownerUserId !== undefined) {
+      if (this.isOwner(cmd.userId)) await this.post(cmd.chatId, phrases.paired());
+      else this.deny("start", cmd.chatId, cmd.userId);
+      return;
+    }
+    const code = this.deps.pairingCode;
+    if (code === undefined || cmd.userId === undefined || cmd.arg?.trim() !== code) {
+      this.deny("start", cmd.chatId, cmd.userId);
+      return;
+    }
+    const allowed = config.access.allowedChatIds.includes(cmd.chatId)
+      ? config.access.allowedChatIds
+      : [...config.access.allowedChatIds, cmd.chatId];
+    await this.deps.settings.set({
+      ...config,
+      access: { ownerUserId: cmd.userId, allowedChatIds: allowed },
+    });
+    delete this.deps.pairingCode; // single use
+    this.deps.logger.info("access.paired", { chatId: cmd.chatId, userId: cmd.userId });
+    await this.post(cmd.chatId, phrases.paired());
   }
 
   /** Test/introspection hook: metadata of the last document per chat (never content). */

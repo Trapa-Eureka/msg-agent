@@ -32,6 +32,9 @@ const CALLS: Record<PhraseKey, (p: Phrases) => string> = {
   langChanged: (p) => p.langChanged("ja"),
   langInvalid: (p) => p.langInvalid("Klingon"),
   unknownError: (p) => p.unknownError(),
+  paired: (p) => p.paired(),
+  chatAllowed: (p) => p.chatAllowed(),
+  chatDenied: (p) => p.chatDenied(),
 };
 const KEYS = Object.keys(CALLS) as PhraseKey[];
 

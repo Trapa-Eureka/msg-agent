@@ -10,6 +10,8 @@ export interface FakeDocInput {
   chatId: string;
   messageId?: string;
   fileName: string;
+  /** Sender; defaults to "owner" so existing tests run as the paired owner. */
+  userId?: string;
   mime?: string;
   bytes?: Uint8Array;
   /** Override the reported size (e.g. 21 MB without allocating it). */
@@ -69,6 +71,7 @@ export class FakeMessenger implements MessengerAdapter {
     const doc: IncomingDoc = {
       chatId: input.chatId,
       messageId,
+      userId: input.userId ?? "owner",
       fileName: input.fileName,
       mime: input.mime ?? "application/octet-stream",
       sizeBytes: input.sizeBytes ?? bytes.byteLength,
@@ -84,7 +87,7 @@ export class FakeMessenger implements MessengerAdapter {
 
   async emitCommand(cmd: IncomingCommand): Promise<void> {
     if (this.cmdHandler === undefined) throw new Error("no command handler registered");
-    await this.cmdHandler(cmd);
+    await this.cmdHandler({ userId: "owner", ...cmd });
   }
 
   /** Text posts for one chat, in order. */

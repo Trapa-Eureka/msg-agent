@@ -35,6 +35,10 @@ export const ko = {
   langChanged: (c) => `모국어를 ${name(c)}(으)로 변경했습니다.`,
   langInvalid: (a) =>
     `알 수 없는 언어 "${a ?? ""}"입니다. ko, en, ja, fil 같은 ISO 639 코드를 사용하세요. 예: /lang ko`,
+  paired: () =>
+    "페어링되었습니다. 소유자로 등록되고 이 대화방이 허용되었습니다. PDF, DOCX, TXT/MD를 보내면 번역합니다.",
+  chatAllowed: () => "이 대화방에서 문서를 받도록 허용했습니다.",
+  chatDenied: () => "이 대화방의 문서 수신 허용을 해제했습니다.",
   unknownError: () =>
     "문서를 처리하는 중 문제가 생겼습니다. 다시 시도해 주세요. 계속 실패하면 봇을 재시작하세요(npm run cli -- start).",
 } satisfies Phrases;

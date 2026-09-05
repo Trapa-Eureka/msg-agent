@@ -19,6 +19,7 @@ const baseConfig: Config = {
   mode: "smart",
   inlineThresholdChars: 3000,
   maxChars: 120_000,
+  access: { ownerUserId: "owner", allowedChatIds: [] },
 };
 const SIGNATURE = "ZQXJV-SIGNATURE-7731";
 const short: ExtractedDoc = syntheticDoc(2000);
@@ -52,6 +53,7 @@ function harness(
     >;
     chunkChars?: number;
     detectorLang?: string;
+    pairingCode?: string;
   } = {},
 ): Harness {
   const messenger = new FakeMessenger();
@@ -76,6 +78,7 @@ function harness(
     clock: new FixedClock(),
     maxBytes: 20 * MB,
     ...(o.chunkChars === undefined ? {} : { chunkChars: o.chunkChars }),
+    ...(o.pairingCode === undefined ? {} : { pairingCode: o.pairingCode }),
   });
   pipeline.attach();
   return { pipeline, messenger, translator, settings, logger, extractor };
@@ -408,5 +411,83 @@ describe("concurrency", () => {
     const texts = h.messenger.textsFor("c");
     expect(texts[0]).toBe("[progressExtracting ko doc.pdf]");
     expect(texts.at(-1)).toBe("[modeChanged ko summary]");
+  });
+});
+
+describe("access control (R1)", () => {
+  it("ignores documents and re-run commands from strangers in non-allowed chats — no download, no reply", async () => {
+    const h = harness();
+    await h.messenger.emitDocument({
+      chatId: "x",
+      fileName: "doc.pdf",
+      userId: "stranger",
+      bytes: new TextEncoder().encode("doc.pdf"),
+    });
+    await h.messenger.emitCommand({ chatId: "x", userId: "stranger", name: "full" });
+    expect(h.messenger.posts).toEqual([]);
+    expect(h.messenger.downloads).toEqual([]);
+    expect(
+      h.logger.entries.filter((e) => e.event === "access.denied").map((e) => e.meta.kind),
+    ).toEqual(["document", "full"]);
+  });
+
+  it("accepts documents from anyone inside an allowed chat, but settings commands stay owner-only", async () => {
+    const h = harness({ config: { access: { ownerUserId: "owner", allowedChatIds: ["g"] } } });
+    await h.messenger.emitDocument({
+      chatId: "g",
+      fileName: "doc.pdf",
+      userId: "member",
+      bytes: new TextEncoder().encode("doc.pdf"),
+    });
+    expect(h.messenger.textsFor("g").at(-1)).toMatch(/^«KO:/u);
+    await h.messenger.emitCommand({ chatId: "g", userId: "member", name: "mode", arg: "full" });
+    await h.messenger.emitCommand({ chatId: "g", userId: "member", name: "allow" });
+    expect(h.settings.get().mode).toBe("smart");
+    expect(h.messenger.textsFor("g").some((t) => t.startsWith("[modeChanged"))).toBe(false);
+    await h.messenger.emitCommand({ chatId: "g", userId: "owner", name: "mode", arg: "full" });
+    expect(h.settings.get().mode).toBe("full");
+  });
+
+  it("pairs the first /start with the right code, once", async () => {
+    const h = harness({ config: { access: { allowedChatIds: [] } }, pairingCode: "123456" });
+    await h.messenger.emitCommand({ chatId: "p", userId: "eve", name: "start", arg: "000000" });
+    await h.messenger.emitCommand({ chatId: "p", userId: "eve", name: "start" });
+    expect(h.messenger.posts).toEqual([]);
+    expect(h.settings.get().access.ownerUserId).toBeUndefined();
+
+    await h.messenger.emitCommand({ chatId: "p", userId: "jin", name: "start", arg: " 123456 " });
+    expect(h.messenger.textsFor("p")).toEqual(["[paired ko]"]);
+    expect(h.settings.get().access).toEqual({ ownerUserId: "jin", allowedChatIds: ["p"] });
+    expect(h.logger.events()).toContain("access.paired");
+
+    // code is single-use; a second stranger cannot take over, the owner just gets the greeting again
+    await h.messenger.emitCommand({ chatId: "q", userId: "eve", name: "start", arg: "123456" });
+    expect(h.settings.get().access.ownerUserId).toBe("jin");
+    await h.messenger.emitCommand({ chatId: "q", userId: "jin", name: "start" });
+    expect(h.messenger.textsFor("q")).toEqual(["[paired ko]"]);
+  });
+
+  it("owner can /allow and /deny chats, and allowed chats then accept documents", async () => {
+    const h = harness();
+    await h.messenger.emitDocument({
+      chatId: "grp",
+      fileName: "doc.pdf",
+      userId: "member",
+      bytes: new TextEncoder().encode("doc.pdf"),
+    });
+    expect(h.messenger.downloads).toEqual([]);
+    await h.messenger.emitCommand({ chatId: "grp", userId: "owner", name: "allow" });
+    expect(h.messenger.textsFor("grp")).toEqual(["[chatAllowed ko]"]);
+    expect(h.settings.get().access.allowedChatIds).toEqual(["grp"]);
+    await h.messenger.emitDocument({
+      chatId: "grp",
+      fileName: "doc.pdf",
+      userId: "member",
+      bytes: new TextEncoder().encode("doc.pdf"),
+    });
+    expect(h.messenger.downloads).toHaveLength(1);
+    await h.messenger.emitCommand({ chatId: "grp", userId: "owner", name: "deny" });
+    expect(h.settings.get().access.allowedChatIds).toEqual([]);
+    expect(h.messenger.textsFor("grp").at(-1)).toBe("[chatDenied ko]");
   });
 });
