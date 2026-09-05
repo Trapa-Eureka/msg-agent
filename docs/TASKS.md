@@ -94,9 +94,10 @@
 - 완료 기준: [x] 시그니처 포함 잘못된 JSON 출력 누출 0 [x] 저장 실패 시 원본 보존(디렉터리 500으로 쓰기 실패 주입) [x] `ANTHROPIC_BASE_URL`·`ANTHROPIC_LOG` 무시(SDK baseURL 고정·logLevel off·.env 선택 로드) [x] check 통과
 - 결정 기록: 로드 시 심볼릭 링크·비정규 파일·group/other 비트 → `unreadable`(detail 코드: symlink / not_regular_file / insecure_permissions, 수정 방법 안내) — 느슨한 권한을 조용히 고치지 않고 거절 / 저장은 임시 파일(`wx`, 600) → rename, 실패 시 임시 파일 제거 / `.env`는 `util.parseEnv`로 허용 키 3개만 / `.gitignore`에 `.msg-agent/`
 
-### R4 — 외부 경계 검증·기한 · 상태: TODO · [06, 14, SEC-08, SEC-09, SEC-12]
+### R4 — 외부 경계 검증·기한 · 상태: DONE(2026-09-06) · [06, 14, SEC-03 부분, SEC-08, SEC-09, SEC-12]
 - 목표: OpenAI 응답 zod 검증(→ `bad_response`), Claude 응답 형태 검사, OpenAI fetch·Telegram 다운로드에 AbortSignal 기한 + 스트리밍 누적 바이트 상한(getFile file_size 검증 포함), Claude SDK timeout.
-- 완료 기준: [ ] `null`/숫자 content → `bad_response` [ ] 한도 초과 스트림 중단 [ ] check 통과
+- 완료 기준: [x] `null`/숫자 content → `bad_response`(zod, 5가지 비정상 형태) [x] 한도 초과 스트림 중단(getFile file_size·content-length·스트림 누적 3중) [x] check 통과
+- 결정 기록: OpenAI `AbortSignal.timeout` 90초(초과 시 network/timeout 재시도 가능), Claude SDK `timeout` 120초, Telegram 다운로드 60초(grammY getFile은 자체 시그널 타입이라 본문 fetch에만 적용) / 파이프라인이 받은 바이트 길이를 재검사 / DOCX: JSZip으로 엔트리 ≤ 200·압축 해제 ≤ 60MB 사전 검사 + 이미지 변환 비활성(`image.read()` 미호출), PDF: `getInfo().total` ≤ 500 확인 후 추출, 추출 전체 60초 기한(`withDeadline`) — CPU 작업 자체 중단은 v0.2 프로세스 격리로
 
 ### R5 — polling 동시성·시작 실패 · 상태: TODO · [04, 05]
 - 목표: 어댑터 핸들러는 큐에 넣고 즉시 반환(채팅 간 병렬, 전역 동시 수 제한), `Pipeline.drain()`으로 종료 시 진행 작업 대기, `start()`는 `bot.init()` 성공 후 resolve하고 polling 치명 오류는 데몬 종료 코드로 전파.

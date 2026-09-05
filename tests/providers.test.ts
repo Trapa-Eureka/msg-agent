@@ -281,6 +281,35 @@ describe("OpenAIProvider (raw fetch)", () => {
     }
   });
 
+  it("turns malformed 200 responses into bad_response instead of TypeError (review 14 / SEC-12)", async () => {
+    for (const body of [
+      null,
+      {},
+      { choices: [] },
+      { choices: [{ message: { content: 42 } }] },
+      "just a string",
+    ]) {
+      const m = mockFetch([{ status: 200, body }]);
+      const e = await new OpenAIProvider({ apiKey: "k", fetch: m.fetch })
+        .summarize({ text: "t", sections: [] }, "ko")
+        .catch((x: unknown) => x);
+      expect(e).toBeInstanceOf(ProviderError);
+      expect(e).toMatchObject({ kind: "bad_response", retryable: true });
+    }
+  });
+
+  it("aborts requests that exceed the timeout as a retryable network error (review 06 / SEC-09)", async () => {
+    const hanging: typeof fetch = (_input, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(init.signal?.reason instanceof Error ? init.signal.reason : new Error("aborted"));
+        });
+      });
+    const p = new OpenAIProvider({ apiKey: "k", fetch: hanging, timeoutMs: 20 });
+    const e = await p.translate(chunks.slice(0, 1), "ko", {}).catch((x: unknown) => x);
+    expect(e).toMatchObject({ kind: "network", retryable: true, detail: "timeout" });
+  });
+
   it("wraps network failures as retryable and verifies via GET /models/{model}", async () => {
     const failing: typeof fetch = () => Promise.reject(new TypeError("fetch failed"));
     const e = await new OpenAIProvider({ apiKey: "k", fetch: failing })

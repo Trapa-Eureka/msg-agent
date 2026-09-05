@@ -66,7 +66,7 @@ export type OutputPlan =
 ## 3. 파이프라인 (core/pipeline.ts)
 
 1. `IncomingDoc` 수신 → 크기·형식 가드 (미지원/초과 → `reject` 플랜, 사유는 모국어 문구)
-2. 진행 알림 게시 → 다운로드 → 추출기 라우팅(`supports`: MIME 우선, `application/octet-stream` 등 불명확하면 확장자로 판정) → `ExtractedDoc`. 섹션 구조화는 공용 휴리스틱(`core/sections.ts`: Markdown 제목·짧은 무종결 단독 행 = 제목, 빈 줄 = 문단)
+2. 진행 알림 게시 → 다운로드 → 추출기 라우팅(`supports`: MIME 우선, `application/octet-stream` 등 불명확하면 확장자로 판정) → `ExtractedDoc`. 섹션 구조화는 공용 휴리스틱(`core/sections.ts`: Markdown 제목·짧은 무종결 단독 행 = 제목, 빈 줄 = 문단). 파서 사전 검사(R4, SEC-03 부분 대응): DOCX는 ZIP 엔트리 수 ≤ 200·압축 해제 합계 ≤ 60MB를 파싱 전에 확인하고 이미지 변환은 비활성화, PDF는 페이지 수 ≤ 500 확인 후 텍스트 추출, 추출 전체에 60초 기한(초과 시 `corrupt`/timeout — CPU 작업 자체를 끊지는 못하므로 프로세스 격리는 v0.2).
 3. 언어 감지 — franc(`core/detector.ts`). 신뢰도 = 표본 글자 수 계수(100자에서 1) × 표본 전·후반 감지 일치도(둘 다 일치 1 / 하나 0.7 / 없음 0.4). **0.7 이상**일 때만 감지 언어 = 모국어면 `skip_same_lang`, 미만이면 `sourceLangHint` 없이 번역 프롬프트에 위임. 매크로언어 구성원(arb→ar, cmn→zh 등)은 `core/lang.ts`에서 정규화
 4. `outputPlanner.decidePlan`: 판정 순서 = 미지원 형식 → 바이트 상한(다운로드 전) → 같은 언어(신규 업로드만) → `maxChars` 초과(`/full`·`/summary`도 우회 불가, 파일 분할 안내) → `/summary`·`/full` 요청 → 모드×임계치(임계치 이하 = 짧음, 포함). 결과는 `PlanDecision`(종류·거절 사유만, 내용 없음). **길이 기준은 정규화된 추출 텍스트의 `length`(공백 포함)** — 프로바이더에 실제로 보내는 문자열과 같은 척도(R2; `countChars`는 표시용). 추가 가드(R2): 청크 수 > `maxChunksPerDoc`(기본 50) → 거절, 채팅별 시간당 문서·재실행 수 > `limits.docsPerChatPerHour` → `rateLimited`, 전역 일일 누적 문자 > `limits.dailyChars` → `dailyBudgetExhausted`(모두 메모리 카운터, 메타만).
 5. 전문 경로: `chunker`(섹션 → 문단 → 문장 → 자소 클러스터 순으로 분할, 청크당 기본 4,000자, 각 청크는 섹션 제목을 `# `로 포함, 섹션 경계는 넘지 않음) → `translate` (진행 상태 n/m 갱신) → `assembleChunks`로 순번대로 조립(누락 청크가 있으면 게시하지 않음)
@@ -89,7 +89,7 @@ export type OutputPlan =
 
 ## 4. Telegram 어댑터 메모
 
-- grammY long polling. 문서 핸들러: `message:document` → `IncomingDoc`(메타만). 다운로드는 `download()` 호출 시에만 getFile → 파일 URL fetch. **어댑터 자체가 20MB 초과면 `download()`를 거부**(getFile 호출 없음)하고, 파이프라인은 그 전에 planner의 바이트 가드로 reject한다(이중 방어).
+- grammY long polling. 문서 핸들러: `message:document` → `IncomingDoc`(메타만). 다운로드는 `download()` 호출 시에만 getFile → 파일 URL fetch. **어댑터 자체가 20MB 초과면 `download()`를 거부**(getFile 호출 없음)하고, 파이프라인은 그 전에 planner의 바이트 가드로 reject한다(이중 방어). R4: getFile 응답의 `file_size`도 검사하고, 본문은 스트림으로 누적하며 상한을 넘는 순간 중단(메타데이터 누락·위조 대비), 요청 전체에 `AbortSignal.timeout`(기본 60초). 파이프라인은 받은 바이트 길이를 다시 확인한다.
 - `postText`는 4,096자 제한에 맞춰 분할 게시 — 공용 함수 `core/textSplit.ts`(`splitForMessenger`: 문단 → 줄 → 문장 → 자소 순, 어댑터와 FakeMessenger가 같은 함수 사용), 순서 보장을 위해 순차 전송. 자소 하나가 상한보다 길면(결합 문자 폭탄) 코드포인트 단위로 잘라 **모든 조각 길이 ≤ 상한**을 보장(R2; 청크 분할도 동일). `postFile`은 sendDocument(InputFile from bytes).
 - 명령(`/full`, `/summary`, `/mode`, `/lang`)은 `start()` 시 `setMyCommands`로 등록해 자동완성 노출(BotFather 수동 등록 불필요). 명령 인자는 `ctx.match`.
 - 테스트: 네트워크 0건 — `botInfo` 주입으로 getMe 생략, `api.config.use` 트랜스포머로 Bot API 호출을 가로채 요청 형태(method·payload)를 검증, `bot.handleUpdate`로 업데이트 주입, 파일 다운로드는 주입 fetch.
@@ -99,7 +99,7 @@ export type OutputPlan =
 
 - ClaudeProvider(기본)·OpenAIProvider — 공통: 청크별 번역 프롬프트(용어·수치·고유명사 보존 지시, 출력은 번역문만), 요약 프롬프트(제목·핵심 조항·수치·요청사항 구조). 프롬프트 텍스트는 `core/prompts.ts` 한 곳에만 둔다. 청크는 순차 호출(진행 n/m 콜백), 청크 재시도는 파이프라인(T6) 책임이며 프로바이더는 `ProviderError`(retryable 플래그)를 던진다.
 - Claude: 공식 SDK(`@anthropic-ai/sdk`)에 `fetch`를 주입해 테스트에서는 목 fetch로 요청 형태를 검증한다. 기본 모델 `claude-sonnet-5`(config `provider.model`로 변경), 번역은 `output_config.effort: "low"`, 요약은 `"medium"`. 서버측 fallbacks(`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`)는 **Opus 5·Fable 5 계열에서만** 붙인다 — Sonnet 5는 `fallbacks` 파라미터를 400으로 거부함(2026-09-05 실 스모크에서 발견). `stop_reason: "refusal"`이면 `refusal` 오류. 키 검증(`verify`)은 models 조회라 요청 형태 오류를 잡지 못하므로 `npm run smoke`가 1청크 실번역 프로브를 추가로 수행한다. 키 검증은 `GET /v1/models/{model}`.
-- OpenAI: Chat Completions(`/v1/chat/completions`) raw fetch, 기본 모델 `gpt-5`(config로 변경), 키 검증은 `GET /v1/models/{model}`. 401→auth, 429→rate_limit(재시도 가능), 5xx→server(재시도 가능).
+- OpenAI: Chat Completions(`/v1/chat/completions`) raw fetch, 기본 모델 `gpt-5`(config로 변경), 키 검증은 `GET /v1/models/{model}`. 401→auth, 429→rate_limit(재시도 가능), 5xx→server(재시도 가능). R4: 응답 본문은 zod로 검증해 형태가 다르면 `bad_response`(TypeError 금지), 요청에 `AbortSignal.timeout`(기본 90초, 초과 시 `network`/timeout 재시도 가능). Claude SDK는 `timeout: 120s`.
 - 온보딩 `init`에서 키 검증 1회 호출. 실패 시 수정 방법 담긴 안내.
 - 토큰 상한(config `maxChars`) 초과 문서는 planner가 요약 모드 강제 제안 → 사용자가 `/full`로 명시 요청해도 상한 초과면 거절 사유 안내 (가드레일 5).
 

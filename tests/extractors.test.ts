@@ -8,7 +8,8 @@ import {
   createExtractors,
   findExtractor,
 } from "../src/adapters/extractors/index.js";
-import { htmlToBlocks } from "../src/adapters/extractors/docx.js";
+import { htmlToBlocks, zipBudget } from "../src/adapters/extractors/docx.js";
+import { withDeadline } from "../src/adapters/extractors/limits.js";
 import type { ExtractedDoc } from "../src/core/index.js";
 import { countChars } from "../src/core/index.js";
 
@@ -112,6 +113,28 @@ describe("DocxExtractor", () => {
     expect(htmlToBlocks("<h2>A &amp; B</h2><p>x<br/>y</p><ul><li>i</li><li>j</li></ul>")).toBe(
       "\n\n## A & B\n\nx\ny\n\n- i\n- j\n\n\n",
     );
+  });
+});
+
+describe("extraction limits (R4 / SEC-03 partial)", () => {
+  it("refuses DOCX archives over the entry budget before parsing", async () => {
+    const r = await new DocxExtractor({ maxEntries: 1 }).extract(fixture("es.docx"));
+    expect(r).toEqual({ ok: false, error: { kind: "corrupt", detail: "zip_budget" } });
+    const budget = await zipBudget(fixture("es.docx"));
+    expect(budget.entries).toBeGreaterThan(1);
+    expect(budget.uncompressed).toBeGreaterThan(budget.entries);
+  });
+  it("refuses PDFs with more pages than allowed before extracting text", async () => {
+    const r = await new PdfExtractor({ maxPages: 1 }).extract(fixture("en-long.pdf"));
+    expect(r).toEqual({ ok: false, error: { kind: "corrupt", detail: "too_many_pages" } });
+    expect((await new PdfExtractor({ maxPages: 1 }).extract(fixture("en-short.pdf"))).ok).toBe(
+      true,
+    );
+  });
+  it("releases the caller when extraction exceeds the deadline", async () => {
+    const never = new Promise<never>(() => undefined);
+    const r = await withDeadline(never, 5);
+    expect(r).toEqual({ ok: false, error: { kind: "corrupt", detail: "timeout" } });
   });
 });
 

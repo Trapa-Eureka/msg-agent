@@ -12,6 +12,7 @@ import { ProviderError, err, ok, summaryPrompt, translationPrompt } from "../../
 
 export const CLAUDE_DEFAULT_MODEL = "claude-sonnet-5";
 export const CLAUDE_BASE_URL = "https://api.anthropic.com";
+const CLAUDE_TIMEOUT_MS = 120_000;
 const MAX_TOKENS = 16000;
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 /** Server-side refusal fallbacks exist only on the Opus 5 / Fable 5 families; Sonnet 5 rejects the parameter. */
@@ -60,6 +61,7 @@ export class ClaudeProvider implements TranslatorProvider {
       // R3: never let the environment redirect requests or turn on SDK debug logging (bodies could be logged).
       baseURL: CLAUDE_BASE_URL,
       logLevel: "off",
+      timeout: CLAUDE_TIMEOUT_MS,
       ...(opts.fetch === undefined ? {} : { fetch: opts.fetch }),
       // Retries belong to the pipeline (one per chunk); the SDK must not add its own (R2 / review 07).
       maxRetries: opts.maxRetries ?? 0,
@@ -85,6 +87,9 @@ export class ClaudeProvider implements TranslatorProvider {
         : await this.client.messages.create(request);
     } catch (e) {
       throw toProviderError(e);
+    }
+    if (!Array.isArray(response.content)) {
+      throw new ProviderError("bad_response", true, undefined, "schema");
     }
     if (response.stop_reason === "refusal")
       throw new ProviderError("refusal", false, undefined, "refusal");

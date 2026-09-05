@@ -7,6 +7,7 @@ import { TELEGRAM_MESSAGE_LIMIT, splitForMessenger } from "../core/index.js";
 
 /** Bot API getFile limit — larger files are never downloaded (SPEC §5). */
 export const TELEGRAM_MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
+const DOWNLOAD_TIMEOUT_MS = 60_000;
 export const TELEGRAM_COMMANDS: readonly { command: CommandName; description: string }[] = [
   { command: "full", description: "마지막 문서 전문 번역을 파일로" },
   { command: "summary", description: "마지막 문서 요약 다시" },
@@ -34,6 +35,8 @@ export interface TelegramAdapterOptions {
   /** Intercepts Bot API calls (tests). */
   apiTransformer?: Transformer;
   maxDownloadBytes?: number;
+  /** Whole-download deadline (getFile + body). Default 60 s. */
+  downloadTimeoutMs?: number;
   /** Called when long polling stops because of an error. */
   onError?: (error: unknown) => void;
 }
@@ -46,6 +49,7 @@ export class TelegramAdapter implements MessengerAdapter {
   private readonly token: string;
   private readonly fetchImpl: typeof fetch;
   private readonly maxBytes: number;
+  private readonly downloadTimeoutMs: number;
   private readonly onError: ((e: unknown) => void) | undefined;
   private docHandler: DocHandler | undefined;
   private cmdHandler: CmdHandler | undefined;
@@ -55,6 +59,7 @@ export class TelegramAdapter implements MessengerAdapter {
     this.token = opts.token;
     this.fetchImpl = opts.fetch ?? fetch;
     this.maxBytes = opts.maxDownloadBytes ?? TELEGRAM_MAX_DOWNLOAD_BYTES;
+    this.downloadTimeoutMs = opts.downloadTimeoutMs ?? DOWNLOAD_TIMEOUT_MS;
     this.onError = opts.onError;
     this.bot = new Bot(opts.token, opts.botInfo === undefined ? {} : { botInfo: opts.botInfo });
     if (opts.apiTransformer !== undefined) this.bot.api.config.use(opts.apiTransformer);
@@ -89,6 +94,7 @@ export class TelegramAdapter implements MessengerAdapter {
     const maxBytes = this.maxBytes;
     const fetchImpl = this.fetchImpl;
     const token = this.token;
+    const timeoutMs = this.downloadTimeoutMs;
     const userId = String(msg.from.id);
     return {
       chatId: String(msg.chat.id),
@@ -103,11 +109,19 @@ export class TelegramAdapter implements MessengerAdapter {
             `file exceeds download limit (${String(sizeBytes)} > ${String(maxBytes)} bytes)`,
           );
         }
+        const signal = AbortSignal.timeout(timeoutMs);
         const file = await ctx.api.getFile(doc.file_id);
         if (file.file_path === undefined) throw new Error("telegram returned no file_path");
-        const res = await fetchImpl(`https://api.telegram.org/file/bot${token}/${file.file_path}`);
+        if (file.file_size !== undefined && file.file_size > maxBytes) {
+          throw new RangeError(
+            `file exceeds download limit (${String(file.file_size)} > ${String(maxBytes)} bytes)`,
+          );
+        }
+        const res = await fetchImpl(`https://api.telegram.org/file/bot${token}/${file.file_path}`, {
+          signal,
+        });
         if (!res.ok) throw new Error(`file download failed: http ${String(res.status)}`);
-        return new Uint8Array(await res.arrayBuffer());
+        return readCapped(res, maxBytes);
       },
     };
   }
@@ -159,4 +173,36 @@ export class TelegramAdapter implements MessengerAdapter {
     await this.polling;
     this.polling = undefined;
   }
+}
+
+/** Reads a response body while enforcing `maxBytes`; cancels the stream as soon as the cap is exceeded. */
+export async function readCapped(res: Response, maxBytes: number): Promise<Uint8Array> {
+  const declared = Number(res.headers.get("content-length") ?? "0");
+  if (declared > maxBytes) {
+    await res.body?.cancel();
+    throw new RangeError(
+      `file exceeds download limit (${String(declared)} > ${String(maxBytes)} bytes)`,
+    );
+  }
+  if (res.body === null) return new Uint8Array(await res.arrayBuffer());
+  const reader = (res.body as ReadableStream<Uint8Array>).getReader();
+  const parts: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new RangeError(`file exceeds download limit (> ${String(maxBytes)} bytes)`);
+    }
+    parts.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const p of parts) {
+    out.set(p, offset);
+    offset += p.byteLength;
+  }
+  return out;
 }
