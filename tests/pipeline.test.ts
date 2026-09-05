@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createExtractors } from "../src/adapters/extractors/index.js";
-import { FrancDetector, Pipeline, type Config, type ExtractedDoc } from "../src/core/index.js";
+import {
+  FrancDetector,
+  Pipeline,
+  structureText,
+  type Config,
+  type ExtractedDoc,
+} from "../src/core/index.js";
 import { CapturingLogger } from "../src/mocks/capturingLogger.js";
 import { FakeMessenger } from "../src/mocks/fakeMessenger.js";
 import { fakePhrases } from "../src/mocks/fakePhrases.js";
@@ -569,5 +575,34 @@ describe("global concurrency limit and drain (R5)", () => {
     await h.pipeline.drain();
     await work;
     expect(h.logger.events()).toContain("doc.done");
+  });
+});
+
+describe("mixed-language documents go through translation (R6)", () => {
+  it("translates instead of skipping when only the head is in the native language", async () => {
+    const text =
+      "공급자는 모듈을 기한 내에 납품하고 매월 청구서를 발행합니다. ".repeat(24) +
+      "The vendor delivers the modules on time and invoices monthly. ".repeat(200);
+    const messenger = new FakeMessenger();
+    const translator = new FakeTranslator();
+    const pipeline = new Pipeline({
+      messenger,
+      extractors: [new FixtureExtractor({ txt: structureText(text) })],
+      detector: new FrancDetector(),
+      translator,
+      settings: new MemorySettings(baseConfig),
+      phrasesFor: fakePhrases,
+      logger: new CapturingLogger(),
+      clock: new FixedClock(),
+      maxBytes: 20 * MB,
+    });
+    pipeline.attach();
+    await messenger.emitDocument({
+      chatId: "m",
+      fileName: "mixed.txt",
+      bytes: new TextEncoder().encode("mixed.txt"),
+    });
+    expect(messenger.textsFor("m").some((t) => t.startsWith("[skipSameLang"))).toBe(false);
+    expect(translator.calls.chunks).toBeGreaterThan(0);
   });
 });

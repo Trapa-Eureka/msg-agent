@@ -145,7 +145,11 @@ export class TelegramAdapter implements MessengerAdapter {
         i === 0 && replyTo !== undefined
           ? { reply_parameters: { message_id: Number(replyTo) } }
           : {};
-      await this.bot.api.sendMessage(chatId, part, reply);
+      // SEC-11: never let Telegram fetch previews for URLs that came from the document or the model.
+      await this.bot.api.sendMessage(chatId, part, {
+        ...reply,
+        link_preview_options: { is_disabled: true },
+      });
     }
   }
 

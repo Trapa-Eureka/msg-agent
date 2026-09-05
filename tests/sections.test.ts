@@ -9,8 +9,8 @@ describe("structureText", () => {
   it("uses Markdown headings as section titles", () => {
     const doc = structureText("# Title\n\nFirst paragraph.\n\n## Sub\n\nSecond.\n\nThird.");
     expect(doc.sections).toEqual([
-      { title: "Title", text: "First paragraph." },
-      { title: "Sub", text: "Second.\n\nThird." },
+      { title: "Title", level: 1, text: "First paragraph." },
+      { title: "Sub", level: 2, text: "Second.\n\nThird." },
     ]);
   });
 
@@ -36,7 +36,7 @@ describe("structureText", () => {
     const ja = "業務委託契約書\n\n本契約は効力を生じます。";
     const ar = "اتفاقية الخدمات\n\nتصف هذه الاتفاقية الخدمات.";
     expect(structureText(ja).sections).toEqual([
-      { title: "業務委託契約書", text: "本契約は効力を生じます。" },
+      { title: "業務委託契約書", level: 1, text: "本契約は効力を生じます。" },
     ]);
     expect(structureText(ar).sections[0]?.title).toBe("اتفاقية الخدمات");
     expect(structureText(ar).text).toBe(ar);

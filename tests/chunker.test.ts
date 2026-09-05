@@ -8,7 +8,7 @@ import {
   sectionText,
 } from "../src/core/chunker.js";
 import { structureText } from "../src/core/sections.js";
-import type { ExtractedDoc } from "../src/core/types.js";
+import type { Chunk, ExtractedDoc } from "../src/core/types.js";
 
 const fx = (n: string): string => readFileSync(join("fixtures", "docs", n), "utf8");
 
@@ -106,20 +106,76 @@ describe("chunkDocument", () => {
 });
 
 describe("assembleChunks", () => {
-  it("joins in index order regardless of arrival order", () => {
+  const mk = (i: number, sectionIndex: number, sep: string): Chunk => ({
+    index: i,
+    sectionIndex,
+    sep,
+    text: "",
+  });
+  it("joins in index order regardless of arrival order, using original separators inside a section", () => {
+    const chunks = [mk(0, 0, ""), mk(1, 0, " "), mk(2, 1, "")];
     const out = assembleChunks(
       [
         { index: 2, text: "c" },
         { index: 0, text: "a" },
         { index: 1, text: "b" },
       ],
-      3,
+      chunks,
     );
-    expect(out).toBe("a\n\nb\n\nc");
+    expect(out).toBe("a b\n\nc");
   });
   it("throws on a missing chunk so partial results are never posted", () => {
-    expect(() => assembleChunks([{ index: 0, text: "a" }], 2)).toThrow(
-      /missing translated chunk 1 of 2/,
-    );
+    expect(() =>
+      assembleChunks([{ index: 0, text: "a" }], [mk(0, 0, ""), mk(1, 0, "\n\n")]),
+    ).toThrow(/missing translated chunk 1 of 2/);
+  });
+});
+
+describe("structure preservation (R6, review 09)", () => {
+  it("keeps heading levels in chunk text", () => {
+    const doc = structureText("## Terms\n\nBody one.\n\n### Payment\n\nPay now.");
+    expect(doc.sections.map((s) => [s.title, s.level])).toEqual([
+      ["Terms", 2],
+      ["Payment", 3],
+    ]);
+    expect(chunkDocument(doc).map((c) => c.text)).toEqual([
+      "## Terms\n\nBody one.",
+      "### Payment\n\nPay now.",
+    ]);
+  });
+
+  it("reassembles a list split across chunks byte-for-byte (original separators, no extra blank lines)", () => {
+    const list = "- one\n- two\n- three\n- four";
+    const chunks = chunkDocument({ text: list, sections: [{ text: list }] }, 15);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.map((c) => c.sep)).toEqual(["", "\n"]);
+    const identity = chunks.map((c) => ({ index: c.index, text: c.text }));
+    expect(assembleChunks(identity, chunks)).toBe(list);
+  });
+
+  it("is lossless for prose split at sentence boundaries and for the fixtures", () => {
+    const prose = "First sentence.  Second one!\nThird line? Fourth.";
+    const chunks = chunkDocument({ text: prose, sections: [{ text: prose }] }, 20);
+    expect(
+      assembleChunks(
+        chunks.map((c) => ({ index: c.index, text: c.text })),
+        chunks,
+      ),
+    ).toBe(prose);
+    for (const name of ["ja.txt", "ar-rtl.txt", "large-en.txt"]) {
+      const doc = structureText(fx(name));
+      const cs = chunkDocument(doc, 300);
+      const rebuilt = assembleChunks(
+        cs.map((c) => ({ index: c.index, text: c.text })),
+        cs,
+      );
+      // sections are joined by a blank line; heading markers are restored at their original level
+      expect(rebuilt.replace(/\s+/gu, "")).toBe(
+        doc.sections
+          .map((s) => sectionText(s))
+          .join("")
+          .replace(/\s+/gu, ""),
+      );
+    }
   });
 });

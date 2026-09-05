@@ -16,18 +16,66 @@ const ENTITIES: Record<string, string> = {
   "&nbsp;": " ",
 };
 
+/**
+ * Converts mammoth's HTML into Markdown-flavoured blocks with a linear tag scan (R6, review 08):
+ * headings keep their level, links become [text](url), ordered lists keep numbers, nested lists indent.
+ */
 export function htmlToBlocks(html: string): string {
-  return html
-    .replace(/<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/giu, (_m, level: string, inner: string) => {
-      return `\n\n${"#".repeat(Number(level))} ${inner.replace(/<[^>]+>/gu, "").trim()}\n\n`;
-    })
-    .replace(/<br\s*\/?>/giu, "\n")
-    .replace(/<li[^>]*>/giu, "- ")
-    .replace(/<\/li>/giu, "\n")
-    .replace(/<\/(?:p|tr|div|blockquote|ul|ol)>/giu, "\n\n")
-    .replace(/<\/t[dh]>/giu, "\t")
-    .replace(/<[^>]+>/gu, "")
-    .replace(/&(?:amp|lt|gt|quot|#39|nbsp);/gu, (e) => ENTITIES[e] ?? e);
+  const decode = (t: string): string =>
+    t.replace(/&(?:amp|lt|gt|quot|#39|nbsp);/gu, (e) => ENTITIES[e] ?? e);
+  const lists: { ordered: boolean; n: number }[] = [];
+  let out = "";
+  let heading: number | undefined;
+  let headingText = "";
+  let href: string | undefined;
+  const push = (t: string): void => {
+    if (heading !== undefined) headingText += t;
+    else out += t;
+  };
+  for (const m of html.matchAll(/<\/?([a-z][a-z0-9]*)\b([^>]*)>|[^<]+/giu)) {
+    const [token, tag, attrs] = m;
+    if (tag === undefined) {
+      push(decode(token));
+      continue;
+    }
+    const closing = token.startsWith("</");
+    const name = tag.toLowerCase();
+    if (/^h[1-6]$/u.test(name)) {
+      if (!closing) {
+        heading = Number(name.slice(1));
+        headingText = "";
+      } else {
+        out += `\n\n${"#".repeat(heading ?? 1)} ${headingText.trim()}\n\n`;
+        heading = undefined;
+      }
+    } else if (name === "br") push("\n");
+    else if (name === "ul" || name === "ol") {
+      if (!closing) lists.push({ ordered: name === "ol", n: 0 });
+      else {
+        lists.pop();
+        if (lists.length === 0) push("\n\n");
+      }
+    } else if (name === "li") {
+      if (!closing) {
+        const list = lists[lists.length - 1] ?? { ordered: false, n: 0 };
+        list.n += 1;
+        const indent = "  ".repeat(Math.max(0, lists.length - 1));
+        push(`\n${indent}${list.ordered ? `${String(list.n)}.` : "-"} `);
+      }
+    } else if (name === "a") {
+      if (!closing) {
+        const found = /href\s*=\s*"([^"]*)"|href\s*=\s*'([^']*)'/iu.exec(attrs ?? "");
+        href = decode(found?.[1] ?? found?.[2] ?? "");
+        push("[");
+      } else {
+        push(href === undefined || href === "" ? "]" : `](${href})`);
+        href = undefined;
+      }
+    } else if (name === "td" || name === "th") {
+      if (closing) push("\t");
+    } else if (closing && ["p", "tr", "div", "blockquote", "table"].includes(name)) push("\n\n");
+  }
+  return out;
 }
 
 export const DOCX_MAX_ENTRIES = 200;

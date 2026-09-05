@@ -3,7 +3,7 @@ import type { ExtractedDoc, Section } from "./types.js";
 
 const MAX_TITLE_CHARS = 80;
 const TERMINAL_PUNCT = /[.!?:;,。．！？：；、]$/u;
-const MARKDOWN_HEADING = /^#{1,6}\s+(.+?)\s*#*$/u;
+const MARKDOWN_HEADING = /^(#{1,6})\s+(.+?)\s*#*$/u;
 const ORDERED_LIST = /^(?:\d+[.)]|[-*+•])\s+/u;
 
 export function normalizeText(raw: string): string {
@@ -16,15 +16,18 @@ export function normalizeText(raw: string): string {
 }
 
 /** A block is a heading when it is a Markdown heading, or a single short line with no terminal punctuation. */
-function asTitle(block: string): string | undefined {
+function asTitle(block: string): { title: string; level: number } | undefined {
   const md = MARKDOWN_HEADING.exec(block);
-  const mdTitle = md?.[1];
-  if (mdTitle !== undefined) return mdTitle.trim();
+  const hashes = md?.[1];
+  const mdTitle = md?.[2];
+  if (hashes !== undefined && mdTitle !== undefined)
+    return { title: mdTitle.trim(), level: hashes.length };
   if (block.includes("\n")) return undefined;
   if (block.length > MAX_TITLE_CHARS) return undefined;
   if (TERMINAL_PUNCT.test(block)) return undefined;
   if (ORDERED_LIST.test(block)) return undefined;
-  return block;
+  if (block.includes("](")) return undefined; // a bare Markdown link is a paragraph, not a heading
+  return { title: block, level: 1 };
 }
 
 /**
@@ -43,9 +46,9 @@ export function structureText(raw: string): ExtractedDoc {
     .filter((b) => b !== "");
 
   for (const block of blocks) {
-    const title = asTitle(block);
-    if (title !== undefined) {
-      current = { title, text: "" };
+    const heading = asTitle(block);
+    if (heading !== undefined) {
+      current = { title: heading.title, level: heading.level, text: "" };
       sections.push(current);
       continue;
     }

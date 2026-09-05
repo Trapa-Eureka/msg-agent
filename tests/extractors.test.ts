@@ -11,7 +11,7 @@ import {
 import { htmlToBlocks, zipBudget } from "../src/adapters/extractors/docx.js";
 import { withDeadline } from "../src/adapters/extractors/limits.js";
 import type { ExtractedDoc } from "../src/core/index.js";
-import { countChars } from "../src/core/index.js";
+import { countChars, structureText } from "../src/core/index.js";
 
 const FIXTURES = join(process.cwd(), "fixtures", "docs");
 const fixture = (name: string): Uint8Array => new Uint8Array(readFileSync(join(FIXTURES, name)));
@@ -45,6 +45,12 @@ describe("routing", () => {
     expect(findExtractor(all, "application/octet-stream", "notes.md")).toBeInstanceOf(
       TextExtractor,
     );
+  });
+  it("lets the MIME type win over a misleading extension (review 16)", () => {
+    const docxMime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    expect(findExtractor(all, docxMime, "report.pdf")).toBeInstanceOf(DocxExtractor);
+    expect(findExtractor(all, "application/pdf", "notes.docx")).toBeInstanceOf(PdfExtractor);
+    expect(findExtractor(all, "text/csv", "data.txt")).toBeInstanceOf(TextExtractor); // unknown MIME -> extension
   });
   it("returns undefined for unsupported formats such as .xlsx", () => {
     expect(findExtractor(all, "application/octet-stream", "sheet.xlsx")).toBeUndefined();
@@ -109,10 +115,20 @@ describe("DocxExtractor", () => {
     const r = await new DocxExtractor().extract(new TextEncoder().encode("not a zip"));
     expect(!r.ok && r.error.kind).toBe("corrupt");
   });
-  it("converts HTML blocks to Markdown-ish text and decodes entities", () => {
+  it("converts HTML to Markdown-ish text: heading levels, entities, links, numbered and nested lists (review 08)", () => {
     expect(htmlToBlocks("<h2>A &amp; B</h2><p>x<br/>y</p><ul><li>i</li><li>j</li></ul>")).toBe(
-      "\n\n## A & B\n\nx\ny\n\n- i\n- j\n\n\n",
+      "\n\n## A & B\n\nx\ny\n\n\n- i\n- j\n\n",
     );
+    const html =
+      '<ol><li>Pay</li><li>Ship<ul><li>sub</li></ul></li></ol><p><a href="https://example.com/pay">Payment portal</a> &amp; more</p>';
+    const out = htmlToBlocks(html);
+    expect(out).toContain("1. Pay");
+    expect(out).toContain("2. Ship");
+    expect(out).toContain("  - sub");
+    expect(out).toContain("[Payment portal](https://example.com/pay) & more");
+    const doc = structureText(out);
+    expect(doc.sections).toHaveLength(1);
+    expect(doc.sections[0]?.text).toContain("1. Pay\n2. Ship\n  - sub");
   });
 });
 
