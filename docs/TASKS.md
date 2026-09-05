@@ -56,9 +56,10 @@
 - 완료 기준: [x] 문구 키 누락 시 빌드 실패(타입으로 강제) [x] ko/en 스냅샷 테스트 [x] check 통과
 - 결정 기록: `src/phrases/{ko,en}.ts`가 `satisfies Phrases`(키 하나 빼고 컴파일하면 실패함을 확인) / `phrasesFor`는 ISO 표기 정규화 후 없으면 en 폴백 / 언어명은 `Intl.DisplayNames`로 팩 언어에 맞춰 렌더(파이프라인은 코드만 전달) / 스냅샷 `tests/__snapshots__/phrases.test.ts.snap` (20키 × 2언어) / CLI 화면 문구(`cli/text.ts`)와 config 오류 문구(`core/configMessages.ts`)는 메신저 팩과 별개로 유지
 
-### T9 — e2e-mock · 상태: TODO · 의존: T7, T8
+### T9 — e2e-mock · 상태: DONE(2026-09-05) · 의존: T7, T8
 - 목표: FakeMessenger로 SPEC §7 시나리오 전부(짧은/긴/스킵/명령 4종/동시 2채팅)를 데몬 조립 상태에서 검증.
-- 완료 기준: [ ] 시나리오 전부 통과 [ ] check 통과
+- 완료 기준: [x] 시나리오 전부 통과 [x] check 통과
+- 결정 기록: `tests/e2e.test.ts`는 `runStart`로 실제 조립(실 추출기·franc·ko/en 문구 팩·파일 설정 저장소)하고 메신저·번역기만 가짜 / 시나리오 9종: 짧은 PDF 인라인, 긴 PDF 요약+파일, 한국어 스킵, 스캔·암호·미지원·상한 초과 안내, 명령 4종(설정 파일 영속·언어 전환 후 EN 문구), 동시 2채팅, 로그·출력·디스크 무잔류, 세션 비용 가드 / 발견·수정: pdf.js가 입력 버퍼를 detach해 같은 바이트 재추출이 실패하던 문제 → PdfExtractor가 복사본 전달
 
 ### T10 — 커버리지 + 프라이버시 감사 테스트 · 상태: TODO · 의존: T9
 - 목표: core ≥ 90% 리포트, 로그·임시파일 본문 잔류 부재 자동 검사(시그니처 문자열 기법) 상시 테스트화.

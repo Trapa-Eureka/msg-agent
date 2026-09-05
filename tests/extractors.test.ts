@@ -68,6 +68,14 @@ describe("PdfExtractor", () => {
     expect(doc.text).toContain("서비스 이용 약관");
     expect(doc.text).toContain("월 1.5%");
   });
+  it("can extract the same bytes twice (buffer is not detached by pdf.js)", async () => {
+    const bytes = fixture("en-short.pdf");
+    const x = new PdfExtractor();
+    const first = await x.extract(bytes);
+    const second = await x.extract(bytes);
+    expect(first.ok && second.ok).toBe(true);
+    expect(bytes.byteLength).toBeGreaterThan(0);
+  });
   it("returns empty_text for a PDF without a text layer", async () => {
     const r = await new PdfExtractor().extract(fixture("scanned.pdf"));
     expect(r).toEqual({ ok: false, error: { kind: "empty_text" } });
