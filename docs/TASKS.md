@@ -135,7 +135,7 @@ T0–T11 all DONE, SPEC §7 completion verdict met. **No code work remains, only
 - [x] `npm publish` → `msg-agent@0.1.0` published, tag `v0.1.0` pushed, `npx msg-agent@0.1.0 --version` = 0.1.0 (2026-09-06)
 - [x] README status line updated with the npm link and version after publishing (2026-09-06)
 
-**v0.1.0 released (2026-09-06).** v0.1.1 (2026-09-06): documentation and in-code text translated to English, no behaviour change. Next: the v0.2 queue.
+**v0.1.0 released (2026-09-06).** v0.1.1 (2026-09-06): documentation and in-code text translated to English, no behaviour change. v0.1.2 (2026-09-06): `--version` reads `package.json` instead of a hard-coded constant (found when verifying 0.1.1). Next: the v0.2 queue.
 
 ## v0.2 queue (do not start — see the SPEC roadmap)
 

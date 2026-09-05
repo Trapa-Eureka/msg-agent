@@ -1,6 +1,6 @@
 {
   "name": "msg-agent",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Personal agent that auto-translates documents uploaded to a messenger chat into your native language",
   "license": "MIT",
   "type": "module",

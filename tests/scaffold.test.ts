@@ -1,8 +1,11 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { CORE_VERSION } from "../src/core/index.js";
+import { PACKAGE_VERSION } from "../src/version.js";
 
-describe("scaffold", () => {
-  it("exposes the core version string", () => {
-    expect(CORE_VERSION).toBe("0.1.0");
+describe("version", () => {
+  it("reports the version from package.json so --version never drifts from the release", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { version: string };
+    expect(PACKAGE_VERSION).toBe(pkg.version);
+    expect(PACKAGE_VERSION).toMatch(/^\d+\.\d+\.\d+$/u);
   });
 });

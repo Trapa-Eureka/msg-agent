@@ -1,5 +1,4 @@
 // core: pure logic only — no external IO.
-export const CORE_VERSION = "0.1.0";
 
 export type * from "./types.js";
 export { ProviderError } from "./types.js";
