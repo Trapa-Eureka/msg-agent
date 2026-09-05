@@ -16,7 +16,7 @@
 | `FakeTranslator` | 마커 변환 + `failOnChunk: n` 실패 주입 + 호출 수 기록(비용 가드 검증) |
 | `FixtureExtractor` | 확장자→고정 ExtractedDoc 매핑 (실 추출기 단위 테스트는 별도) |
 | `FixedClock` | 진행 메시지 타임스탬프 결정론 |
-| fixtures/docs/ | 영어 PDF(짧은/긴), 스페인어 DOCX, 일본어 TXT, 한국어 PDF(같은 언어 스킵용), 빈 텍스트 PDF(스캔 흉내), 암호 PDF, RTL(아랍어) TXT, 대용량 더미 |
+| fixtures/docs/ | 영어 PDF(짧은/긴)·MD, 스페인어 DOCX, 일본어 TXT, 한국어 PDF(같은 언어 스킵용), 빈 텍스트 PDF(스캔 흉내), 암호 PDF, RTL(아랍어) TXT, 대용량 더미(maxChars 초과용 TXT ~130k자; 20MB 초과는 파일 없이 메타만으로 검증). `npm run fixtures`로 재생성(scripts/fixtures/generate.ts, macOS 폰트 필요) |
 
 ## 3. 골든 플랜 케이스 (outputPlanner 단위)
 

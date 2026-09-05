@@ -1,4 +1,5 @@
 // Core interfaces — DESIGN §2. The core knows nothing about grammY, pdf-parse, or any provider SDK.
+import type { Result } from "./result.js";
 
 export type CommandName = "full" | "summary" | "mode" | "lang";
 export type OutputMode = "smart" | "full" | "summary";
@@ -40,9 +41,17 @@ export interface ExtractedDoc {
   sections: Section[];
 }
 
+export type ExtractError =
+  /** No text layer (scanned document) — OCR arrives in v0.2. */
+  | { kind: "empty_text" }
+  /** Password-protected PDF. */
+  | { kind: "encrypted" }
+  /** Parser failure. `detail` is the library error name only — never document content. */
+  | { kind: "corrupt"; detail: string };
+
 export interface DocumentExtractor {
   supports(mime: string, name: string): boolean;
-  extract(bytes: Uint8Array): Promise<ExtractedDoc>;
+  extract(bytes: Uint8Array): Promise<Result<ExtractedDoc, ExtractError>>;
 }
 
 /** Chunker output. `index` is the assembly order. */
