@@ -43,14 +43,14 @@
 
 - [x] **npm 패키지명 확정** — `msg-agent`(2026-09-05 결정). SPEC §8 기록.
 - [x] **bin 이름·설정 경로 통일** — 2026-09-05 완료: bin `msg-agent`, 설정 `~/.msg-agent/config.json`, CLI 명칭·README 갱신, `package.json`의 `private` 해제(publish는 여전히 사람이 `npm publish`로만).
-- [ ] **npm 계정** — `npm whoami` = shiz_son 로그인 확인(2026-09-05). **2FA 설정 여부는 npmjs.com 계정 설정에서 직접 확인** (publish 시 OTP 요구될 수 있음).
+- [x] **npm 계정** — shiz_son 로그인, 2FA 확인 완료(2026-09-06, publish에 OTP 불필요 모드).
 - [x] **임계치 기본값 승인** — 2026-09-05 3,000 유지 결정(SPEC §8).
 - [x] **히스토리 점검** — 2026-09-05 전체 커밋 스캔(sk-ant-/sk-proj-/봇 토큰 패턴) 0건. `.env`는 추적된 적 없음.
-- [ ] **저장소 공개 전환** — LICENSE·`license`·`repository` 필드는 이미 준비됨. 아래 명령만 실행하면 된다.
+- [x] **저장소 공개 전환** — 2026-09-06 사용자가 전환, `gh repo view`로 PUBLIC 확인.
   ```bash
   gh repo edit Trapa-Eureka/msg-agent --visibility public --accept-visibility-change-consequences
   ```
-- [ ] **npm publish** — 사람이 실행. `prepublishOnly`가 자동으로 `npm run check && npm run build`를 돌리므로 게이트 미통과면 publish가 중단된다.
+- [x] **npm publish** — 2026-09-06 완료: `msg-agent@0.1.0` 게시(80.9 kB, 138 files), 태그 `v0.1.0` 푸시, `npx msg-agent@0.1.0 --version` → 0.1.0 확인. `prepublishOnly`(check + build + tarball 검사) 통과.
   ```bash
   cd /Volumes/DevWork/work/msg-agent
   npm publish            # 2FA면 OTP 입력

@@ -130,10 +130,12 @@ T0~T11 전부 DONE, SPEC §7 완료 판정 충족. **코드 작업은 남아 있
 - [x] git 히스토리 시크릿 스캔 0건, `.env` 미추적
 - [x] 실 스모크 통과(2026-09-05), 임계치 3,000 유지
 - [x] 짧은 영어 PDF로 `inline_full` 경로 실 채팅 확인(2026-09-06, 2,102자 커버레터, 23.5초) · R1~R7 이후 스모크 재통과, 페어링 완료
-- [ ] npm 계정 2FA 확인
-- [ ] 저장소 공개 전환: `gh repo edit Trapa-Eureka/msg-agent --visibility public --accept-visibility-change-consequences`
-- [ ] `npm publish` → `git tag v0.1.0 && git push origin v0.1.0` → `npx msg-agent@0.1.0 --version` 확인
-- [ ] 공개 후 README 상태 줄에 npm 링크·버전 기재
+- [x] npm 계정 2FA 확인(2026-09-06)
+- [x] 저장소 공개 전환(2026-09-06, PUBLIC 확인)
+- [x] `npm publish` → `msg-agent@0.1.0` 게시, 태그 `v0.1.0` 푸시, `npx msg-agent@0.1.0 --version` = 0.1.0 (2026-09-06)
+- [x] 공개 후 README 상태 줄에 npm 링크·버전 기재(2026-09-06)
+
+**v0.1.0 릴리스 완료(2026-09-06).** 다음은 v0.2 대기열.
 
 ## v0.2 대기열 (착수 금지 — SPEC 로드맵 참조)
 
