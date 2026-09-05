@@ -10,7 +10,7 @@ import type {
 } from "../../core/index.js";
 import { ProviderError, err, ok, summaryPrompt, translationPrompt } from "../../core/index.js";
 
-export const CLAUDE_DEFAULT_MODEL = "claude-opus-5";
+export const CLAUDE_DEFAULT_MODEL = "claude-sonnet-5";
 const MAX_TOKENS = 16000;
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 

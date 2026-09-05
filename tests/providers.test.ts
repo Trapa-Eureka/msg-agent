@@ -45,7 +45,7 @@ const claudeMessage = (text: string, stop = "end_turn"): unknown => ({
   id: "msg_1",
   type: "message",
   role: "assistant",
-  model: "claude-opus-5",
+  model: "claude-sonnet-5",
   content: [{ type: "text", text }],
   stop_reason: stop,
   stop_sequence: null,
@@ -82,7 +82,7 @@ describe("ClaudeProvider (SDK + injected fetch)", () => {
     expect(c.headers["x-api-key"]).toBe("sk-test");
     expect(c.headers["anthropic-beta"]).toContain("server-side-fallback-2026-07-01");
     expect(c.body).toMatchObject({
-      model: "claude-opus-5",
+      model: "claude-sonnet-5",
       max_tokens: 16000,
       fallbacks: "default",
       output_config: { effort: "low" },
@@ -98,13 +98,13 @@ describe("ClaudeProvider (SDK + injected fetch)", () => {
     const m = mockFetch([{ status: 200, body: claudeMessage("- 요약") }]);
     const p = new ClaudeProvider({
       apiKey: "k",
-      model: "claude-sonnet-5",
+      model: "claude-opus-5",
       fetch: m.fetch,
       maxRetries: 0,
     });
     expect(await p.summarize({ text: "body", sections: [] }, "ko")).toBe("- 요약");
     expect(m.calls[0]?.body).toMatchObject({
-      model: "claude-sonnet-5",
+      model: "claude-opus-5",
       output_config: { effort: "medium" },
     });
   });
@@ -146,7 +146,7 @@ describe("ClaudeProvider (SDK + injected fetch)", () => {
       {
         status: 200,
         body: {
-          id: "claude-opus-5",
+          id: "claude-sonnet-5",
           type: "model",
           display_name: "x",
           created_at: "2026-01-01T00:00:00Z",
@@ -157,7 +157,7 @@ describe("ClaudeProvider (SDK + injected fetch)", () => {
     expect(await p.verify()).toEqual({ ok: true, value: undefined });
     expect(ok.calls[0]).toMatchObject({
       method: "GET",
-      url: "https://api.anthropic.com/v1/models/claude-opus-5",
+      url: "https://api.anthropic.com/v1/models/claude-sonnet-5",
     });
 
     const bad = mockFetch([
